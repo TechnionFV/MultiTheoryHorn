@@ -48,12 +48,9 @@ namespace multi_theory_horn {
             r = e; 
         }
         else if (e.is_var()) {
-            // map each BV-typed variable to an Int var of same name
-            // std::string name = e.decl().name().str();
-            // r = ctx.int_const(name.c_str());
-            // TODO: Deal with vars
-            // TODO: Push to m_vars
-            NOT_IMPLEMENTED();
+            // This should be unreachable as we declare variables
+            // as constants (0-arity apps)
+            UNREACHABLE();
         }
         else { // is_app
             if (e.is_const() && !e.is_numeral()) {
@@ -61,8 +58,8 @@ namespace multi_theory_horn {
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
                 r = ctx.int_const(name.c_str());
-                //! We only support constants (vars) of Bit-vector sort!
-                assert(e.sort().is_bv() && "Expected a BV sort for constant");
+                // We only support constants (vars) of Bit-vector sort!
+                assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
                 unsigned k = e.get_sort().bv_size();
                 create_lemma(r, k);
                 m_vars.push_back(key);
@@ -139,7 +136,6 @@ namespace multi_theory_horn {
             case Z3_OP_BUDIV_I:
                 k = e.arg(1).get_sort().bv_size();
                 N = (uint64_t)1 << k;
-                // TODO: Make sure this is correct
                 r = if_eq(args[1], 0, ctx.int_val(N - 1), args[0] / args[1]);
                 break;
             case Z3_OP_BSREM:
@@ -150,7 +146,6 @@ namespace multi_theory_horn {
             case Z3_OP_BUREM_I:
                 k = e.arg(1).get_sort().bv_size();
                 N = (uint64_t)1 << k;
-                // TODO: Make sure this is correct
                 r = if_eq(args[1], 0, args[0], args[0] % args[1]);
                 break;
             case Z3_OP_BSMOD:
@@ -254,7 +249,7 @@ namespace multi_theory_horn {
             return umod(e.arg(0), bv_size);
         }
         else if (is_basic(e.arg(0))) {
-            // This is the way to turn a BV basic boolean oepration into an Int
+            // This is the way to turn a BV basic boolean operation into an Int
             return ite(translate_basic(e.arg(0)), 
                 ctx.int_val(1), ctx.int_val(0));
         }
@@ -272,6 +267,7 @@ namespace multi_theory_horn {
 
     z3::expr Bv2IntTranslator::translate_bv_rel(const z3::expr& e) {
         Z3_decl_kind f = e.decl().decl_kind();
+        unsigned k = e.arg(1).get_sort().bv_size();
         std::vector<z3::expr> args;
         for (unsigned i = 0; i < e.num_args(); ++i)
             args.push_back(translate(e.arg(i)));
@@ -281,22 +277,27 @@ namespace multi_theory_horn {
             case Z3_OP_ULEQ:
                 r = args[0] <= args[1];
                 break;
-            //? : Ask if we can assume that all BV vars have the same size
-            // If not, get the size from one of the arguments that is a BV
-            //case Z3_OP_SLEQ:
-                //r = uts(args[0], k) <= uts(args[1], k);
+            case Z3_OP_SLEQ:
+                r = uts(args[0], k) <= uts(args[1], k);
+                break;
             case Z3_OP_UGEQ:
                 r = args[0] >= args[1];
                 break;
-            // case Z3_OP_SGEQ:
+            case Z3_OP_SGEQ:
+                r = uts(args[0], k) >= uts(args[1], k);
+                break;
             case Z3_OP_ULT:
                 r = args[0] < args[1];
                 break;
-            // case Z3_OP_SLT:
+            case Z3_OP_SLT:
+                r = uts(args[0], k) < uts(args[1], k);
+                break;
             case Z3_OP_UGT:
                 r = args[0] > args[1];
                 break;
-            // case Z3_OP_SGT:
+            case Z3_OP_SGT:
+                r = uts(args[0], k) > uts(args[1], k);
+                break;
             default:
                 ASSERT_FALSE("Unsupported BV signed relation operation");
         }
@@ -450,7 +451,7 @@ namespace multi_theory_horn {
         
         // This is a strong assertion
         // If e is not a numeral, the computation would be a series of if_eq
-        // TODO: If ultimately we want to support non-numeral exponents, we should
+        // TODO: If ultimately we want to support non-numeral exponents,
         // TODO: we can observe Nikolaj's implementation of pow2 in the Z3 API
         ASSERT_FALSE("Expected a numeral for exponent in pow2");
     }

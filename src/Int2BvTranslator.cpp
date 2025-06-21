@@ -37,10 +37,9 @@ namespace multi_theory_horn {
             r = e; 
         }
         else if (e.is_var()) {
-            // map each int variable to a BV var of same name
-            // TODO: Deal with vars
-            // TODO: Need to find a case in which this is needed
-            NOT_IMPLEMENTED();
+            // This should be unreachable as we declare variables
+            // as constants (0-arity apps)
+            UNREACHABLE();
         }
         else { // is_app
             if (e.is_const() && !e.is_numeral()) {

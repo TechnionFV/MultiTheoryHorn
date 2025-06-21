@@ -21,7 +21,6 @@ namespace multi_theory_horn {
         uint64_t m_UF_counter;
 
         // A set of lemmas specfiying the bounds on the new variables
-        // TODO: Consider turning this into expr_vector so that we can use it mk_and API
         std::vector<z3::expr> m_lemmas;
 
         z3::expr bseli(const z3::expr& e, unsigned i);
