@@ -131,6 +131,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="MultiTheoryHorn.cpp" />
+    <ClCompile Include="src\Bv2IntTranslator.cpp" />
+    <ClCompile Include="src\Int2BvTranslator.cpp" />
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Bv2IntTranslator.h" />
+    <ClInclude Include="src\Int2BvTranslator.h" />
+    <ClInclude Include="src\multi_theory_fixedpoint.h" />
+    <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
