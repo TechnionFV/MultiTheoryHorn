@@ -33,8 +33,9 @@ namespace multi_theory_horn {
         z3::expr r(ctx);    
         if (e.is_quantifier()) {
             // In case of horn clauses, this shouldn't be reached
-            ASSERT_FALSE("Quantifiers should not be present in CHC Int expressions");
-            r = e; 
+            // This should be unrecahable as quantifiers should not be present
+            // in the CHC BV expressions.
+            UNREACHABLE();
         }
         else if (e.is_var()) {
             // This should be unreachable as we declare variables

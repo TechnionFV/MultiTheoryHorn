@@ -1,4 +1,9 @@
+//------------------------------------------------------------------------------
 // Bv2IntTranslator.h
+// A header file for the Bv2IntTranslator class, which translates
+// bit-vector expressions to integer expressions in Z3.
+// Based on the paper: Bit-Precise Reasnoning via Int-Blasting by Zohar et al.
+//------------------------------------------------------------------------------
 
 #pragma once
 #include "utils.h"
@@ -57,7 +62,7 @@ namespace multi_theory_horn {
         // Translate any expr; caches results in m_translate
         z3::expr translate(const z3::expr& e);
 
-        // Accessors for the collected vars/preds
+        // Accessors for the collected vars and lemmas
         const std::vector<Z3_ast>& vars() const   { return m_vars; }
         const std::vector<z3::expr>& lemmas() const { return m_lemmas; }
     };
