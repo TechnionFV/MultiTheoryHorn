@@ -104,7 +104,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\omer.r\source\repos\z3\src\api; C:\Users\omer.r\source\repos\z3\src\api\c++</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\omer.r\source\repos\z3\src\api; C:\Users\omer.r\source\repos\z3\src\api\c++; C:\Users\omer.r\source\repos\MultiTheoryHorn\src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -130,6 +130,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="benchmarks.cpp" />
     <ClCompile Include="MultiTheoryHorn.cpp" />
     <ClCompile Include="src\Bv2IntTranslator.cpp" />
     <ClCompile Include="src\Int2BvTranslator.cpp" />
