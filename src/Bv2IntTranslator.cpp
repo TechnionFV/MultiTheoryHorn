@@ -4,15 +4,16 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c): 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, const VarMap& bv2int_var_map): 
         ctx(c),
-        m_UF_counter(0)
+        m_vars(c),
+        m_UF_counter(0),
+        m_bv2int_var_map(bv2int_var_map)
     {}
 
     void Bv2IntTranslator::reset() {
         m_translate.clear();
         m_lemmas.clear();
-        m_vars.clear();
     }
 
     bool Bv2IntTranslator::is_special_basic(const z3::expr& e) const {
@@ -59,12 +60,18 @@ namespace multi_theory_horn {
                 // Note: numerals are handled in translate_bv: Z3_OP_BNUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
-                r = ctx.int_const(name.c_str());
+                if (m_bv2int_var_map.find(e.decl()) != m_bv2int_var_map.end()) {
+                    // If we have a mapping for this constant, use it
+                    r = m_bv2int_var_map.at(e.decl());
+                } else {
+                    // Otherwise, create a new integer constant
+                    r = ctx.int_const(name.c_str());
+                }
                 // We only support constants (vars) of Bit-vector sort!
                 assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
                 unsigned k = e.get_sort().bv_size();
                 create_lemma(r, k);
-                m_vars.push_back(key);
+                m_vars.push_back(r);
             }
             else if (is_special_basic(e)) {
                 // Handle special basic cases: ite and eq
@@ -86,6 +93,9 @@ namespace multi_theory_horn {
             }
         }
 
+        // Simplify the result expression
+        // TODO: Make sure the operation doesn't take a lot of time
+        r = r.simplify();
         m_translate.emplace(key, r);
         return r;
     }
@@ -117,7 +127,7 @@ namespace multi_theory_horn {
             case Z3_OP_BADD:
                 k = e.arg(1).get_sort().bv_size();
                 N = (uint64_t)1 << k;
-                r = umod(add(args[0], args[1]), k);
+                r = umod(args[0] + args[1], k);
                 break;
             case Z3_OP_BSUB:
                 k = e.arg(1).get_sort().bv_size();
@@ -127,7 +137,7 @@ namespace multi_theory_horn {
             case Z3_OP_BMUL:
                 k = e.arg(1).get_sort().bv_size();
                 N = (uint64_t)1 << k;
-                r = umod(mul(args[0], args[1]), k);
+                r = umod(args[0] * args[1], k);
                 break;
             
             case Z3_OP_BSDIV:
@@ -173,7 +183,7 @@ namespace multi_theory_horn {
             case Z3_OP_CONCAT:
                 k = e.arg(1).get_sort().bv_size();
                 N = (uint64_t)1 << k;
-                r = add((mul(args[0], ctx.int_val(N))), args[1]);
+                r = (args[0] * ctx.int_val(N)) + args[1];
                 break;
             case Z3_OP_EXTRACT: {
                 // Extract bits from a BV
@@ -204,7 +214,7 @@ namespace multi_theory_horn {
 
             case Z3_OP_BSHL:
                 k = e.arg(1).get_sort().bv_size();
-                r = umod(mul(args[0], pow2(args[1])), k);
+                r = umod(args[0] * pow2(args[1]), k);
                 break;
             case Z3_OP_BLSHR:
                 k = e.arg(1).get_sort().bv_size();
@@ -424,25 +434,15 @@ namespace multi_theory_horn {
         return umod(e / ctx.int_val(N), 1);
     }
 
-    z3::expr Bv2IntTranslator::amod(const z3::expr& e, unsigned k) {
-        // Example: a + (b mod N) mod N = (a + b) mod N
-        uint64_t N = (uint64_t)1 << k;
-        if (e.is_numeral()) {
-            // If e is a numeral, we can compute the modulus directly
-            return ctx.int_val(e.get_numeral_int() % N);
-        }
-
-        return z3::mod(e, ctx.int_val(N));
-    }
-
     z3::expr Bv2IntTranslator::umod(const z3::expr& e, unsigned k) {
         // unsigned modulo N = 2^k
-        return amod(e, k);
+        uint64_t N = (uint64_t)1 << k;
+        return z3::mod(e, ctx.int_val(N));
     }
 
     z3::expr Bv2IntTranslator::uts(const z3::expr& e, unsigned k) {
         // 2 * umod(e, k - 1) - e
-        return (mul(ctx.int_val(2), amod(e, k - 1))) - e;
+        return (ctx.int_val(2) * umod(e, k - 1)) - e;
     }
 
     z3::expr Bv2IntTranslator::pow2(const z3::expr& e) {
@@ -467,48 +467,6 @@ namespace multi_theory_horn {
             }
         }
         return ite(e == ctx.int_val(k), th, el);
-    }
-
-    z3::expr Bv2IntTranslator::mul(const z3::expr& x, const z3::expr& y) {
-        if (x.is_numeral()) {
-            if (x.get_numeral_int() == 0)
-                return ctx.int_val(0);
-            if (x.get_numeral_int() == 1)
-                return y;
-        }
-
-        if (y.is_numeral()) {
-            if (y.get_numeral_int() == 0)
-                return ctx.int_val(0);
-            if (y.get_numeral_int() == 1)
-                return x;
-        }
-
-        if (x.is_numeral() && y.is_numeral()) {
-            // If both are integers, we can use the multiplication directly
-            int mul_result = x.get_numeral_int() * y.get_numeral_int();
-            return ctx.int_val(mul_result);
-        }
-
-        return x * y;
-    }
-
-    z3::expr Bv2IntTranslator::add(const z3::expr& x, const z3::expr& y) {
-        if (x.is_numeral())
-            if (x.get_numeral_int() == 0)
-                return y;
-
-        if (y.is_numeral())
-            if (y.get_numeral_int() == 0)
-                return x;
-
-        if (x.is_numeral() && y.is_numeral()) {
-            // If both are integers, we can use the addition directly
-            int add_result = x.get_numeral_int() + y.get_numeral_int();
-            return ctx.int_val(add_result);
-        }
-
-        return x + y;
     }
 
 } // namespace multi_theory_horn
