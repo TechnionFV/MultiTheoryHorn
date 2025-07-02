@@ -1,4 +1,8 @@
-// Bv2IntTranslator.h
+//------------------------------------------------------------------------------
+// Int2BvTranslator.h
+// A header file for the Int2BvTranslator class, which translates
+// integer expressions to bit-vector expressions in Z3.
+//------------------------------------------------------------------------------
 
 #pragma once
 #include "utils.h"
@@ -14,7 +18,11 @@ namespace multi_theory_horn {
         z3::context&      ctx;
         unsigned          m_bv_size; // Size of the BV type to translate to
         
-        std::vector<Z3_ast> m_vars;
+        z3::expr_vector m_vars;
+        // A map which tells us where to map each variable we find
+        // in the expressions given through the translate method
+        VarMap m_int2bv_var_map;
+
         // This map is used to cache translations
         std::unordered_map<Z3_ast, z3::expr, AstHash, AstEq> m_translate;
 
@@ -27,7 +35,7 @@ namespace multi_theory_horn {
         z3::expr translate_special_basic(const z3::expr& e);
 
     public:
-        explicit Int2BvTranslator(z3::context& c, unsigned bv_size);
+        explicit Int2BvTranslator(z3::context& c, unsigned bv_size, const VarMap& bv2int_var_map = VarMap());
 
         // This must be invoked before starting a new translation
         // It clears the cache and resets the translator state
@@ -37,6 +45,6 @@ namespace multi_theory_horn {
         z3::expr translate(const z3::expr& e);
         
         // Accessors for the collected vars
-        const std::vector<Z3_ast>& vars() const   { return m_vars; }
+        const z3::expr_vector& vars() const { return m_vars; }
     };
 } // namespace multi_theory_horn

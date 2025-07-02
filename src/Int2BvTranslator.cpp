@@ -4,14 +4,15 @@
 
 namespace multi_theory_horn {
 
-    Int2BvTranslator::Int2BvTranslator(z3::context& c, unsigned bv_size) : 
+    Int2BvTranslator::Int2BvTranslator(z3::context& c, unsigned bv_size, const VarMap& int2bv_var_map) : 
         ctx(c),
-        m_bv_size(bv_size)
+        m_vars(c),
+        m_bv_size(bv_size),
+        m_int2bv_var_map(int2bv_var_map)
     {}
 
     void Int2BvTranslator::reset() {
         m_translate.clear();
-        m_vars.clear();
     }
 
     bool Int2BvTranslator::is_special_basic(const z3::expr& e) const {
@@ -33,8 +34,9 @@ namespace multi_theory_horn {
         z3::expr r(ctx);    
         if (e.is_quantifier()) {
             // In case of horn clauses, this shouldn't be reached
-            ASSERT_FALSE("Quantifiers should not be present in CHC Int expressions");
-            r = e; 
+            // This should be unrecahable as quantifiers should not be present
+            // in the CHC BV expressions.
+            UNREACHABLE();
         }
         else if (e.is_var()) {
             // This should be unreachable as we declare variables
@@ -46,8 +48,15 @@ namespace multi_theory_horn {
                 // Note: numerals are handled in translate_bv: Z3_OP_ANUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
-                r = ctx.bv_const(name.c_str(), m_bv_size);
-                m_vars.push_back(key);
+                if (m_int2bv_var_map.find(e.decl()) != m_int2bv_var_map.end()) {
+                    // If we have a mapping for this constant use it
+                    r = ctx.bv_const(name.c_str(), m_bv_size);
+                } else {
+                    // Otherwise, create a new BV constant
+                    r = ctx.bv_const(name.c_str(), m_bv_size);
+                }
+                
+                m_vars.push_back(r);
             }
             else if (is_special_basic(e)) {
                 r = translate_special_basic(e);
@@ -62,6 +71,9 @@ namespace multi_theory_horn {
             }
         }
 
+        // Simplify the result expression
+        // TODO: Make sure the operation doesn't take a lot of time
+        r = r.simplify();
         m_translate.emplace(key, r);
         return r;
     }
