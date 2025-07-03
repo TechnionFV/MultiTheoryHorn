@@ -4,8 +4,9 @@
 
 namespace multi_theory_horn {
 
-    Int2BvTranslator::Int2BvTranslator(z3::context& c, unsigned bv_size, const VarMap& int2bv_var_map) : 
+    Int2BvTranslator::Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size, const VarMap& int2bv_var_map) : 
         ctx(c),
+        m_is_signed(is_signed),
         m_vars(c),
         m_bv_size(bv_size),
         m_int2bv_var_map(int2bv_var_map)
@@ -103,7 +104,7 @@ namespace multi_theory_horn {
             case Z3_OP_ANUM:
                 // Translate numeral to BV
                 assert(e.is_numeral() && "Z3_OP_ANUM should only be used with numerals");
-                r = ctx.bv_val(e.get_numeral_int64(), m_bv_size);
+                r = ctx.bv_val(e.get_numeral_int(), m_bv_size);
                 break;
             case Z3_OP_AGNUM:
             case Z3_OP_TO_REAL:
@@ -113,16 +114,16 @@ namespace multi_theory_horn {
                 ASSERT_FALSE("We're not supposed to encounter real numbers");
                 break;
             case Z3_OP_LE:
-                r = args[0] <= args[1];
+                r = (m_is_signed) ? args[0] <= args[1] : z3::ule(args[0], args[1]);
                 break;
             case Z3_OP_GE:
-                r = args[0] >= args[1];
+                r = (m_is_signed) ? args[0] >= args[1] : z3::uge(args[0], args[1]);
                 break;
             case Z3_OP_LT:
-                r = args[0] < args[1];
+                r = (m_is_signed) ? args[0] < args[1]:  z3::ult(args[0], args[1]);
                 break;
             case Z3_OP_GT:
-                r = args[0] > args[1];
+                r = (m_is_signed) ? args[0] > args[1] : z3::ugt(args[0], args[1]);
                 break;
             case Z3_OP_ADD:
                 r = args[0] + args[1];
