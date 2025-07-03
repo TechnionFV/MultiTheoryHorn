@@ -24,6 +24,12 @@ namespace multi_theory_horn {
         return (Z3_OP_TRUE <= f && f <= Z3_OP_OEQ);
     }
 
+    bool Int2BvTranslator::is_int_relation(const z3::expr& e) const {
+        Z3_decl_kind f = e.decl().decl_kind();
+        bool has_int_arg = any_of(e.args(), [&](z3::expr arg) { return arg.is_int(); });
+        return Z3_OP_LE <= f && f <= Z3_OP_GT && has_int_arg;
+    }
+
     z3::expr Int2BvTranslator::translate(const z3::expr& e) {
         Z3_ast key = e; // implicit cast to Z3_ast
         auto it = m_translate.find(key);
@@ -64,6 +70,9 @@ namespace multi_theory_horn {
             else if (is_basic(e)) {
                 r = translate_basic(e);
             }
+            else if (is_int_relation(e)) {
+                r = translate_int(e);
+            }
             else { // is_int
                 // Translate arguments
                 assert(e.is_int() && "Expected an Int expression");
@@ -72,7 +81,6 @@ namespace multi_theory_horn {
         }
 
         // Simplify the result expression
-        // TODO: Make sure the operation doesn't take a lot of time
         r = r.simplify();
         m_translate.emplace(key, r);
         return r;
