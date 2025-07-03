@@ -28,6 +28,7 @@ namespace multi_theory_horn {
 
         bool is_special_basic(const z3::expr& e) const;
         bool is_basic(const z3::expr& e) const;
+        bool is_int_relation(const z3::expr& e) const;
 
         // Core translation routines
         z3::expr translate_int(const z3::expr& e);

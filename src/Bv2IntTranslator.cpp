@@ -94,7 +94,6 @@ namespace multi_theory_horn {
         }
 
         // Simplify the result expression
-        // TODO: Make sure the operation doesn't take a lot of time
         r = r.simplify();
         m_translate.emplace(key, r);
         return r;
