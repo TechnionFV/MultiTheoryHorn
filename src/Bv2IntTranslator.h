@@ -16,6 +16,7 @@ namespace multi_theory_horn {
 
     class Bv2IntTranslator {
         z3::context&      ctx;
+        bool              m_is_signed; // Whether to treat bit-vectors as signed or unsigned
 
         // Map each original BV expr AST to its translated Int expr
         // This is used to cache results of translations
@@ -54,9 +55,9 @@ namespace multi_theory_horn {
         z3::expr translate_special_basic(const z3::expr& e);
         
         z3::expr create_bitwise_uf(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k);
-        void create_lemma(z3::expr& var, unsigned k);
+        void create_bound_lemma(z3::expr& var, unsigned k);
     public:
-        explicit Bv2IntTranslator(z3::context& c, const VarMap& bv2int_var_map = VarMap());
+        explicit Bv2IntTranslator(z3::context& c, bool is_signed, const VarMap& bv2int_var_map = VarMap());
         void reset();
 
         // Translate any expr; caches results in m_translate

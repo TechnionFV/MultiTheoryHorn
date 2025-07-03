@@ -4,8 +4,9 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, const VarMap& bv2int_var_map): 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, const VarMap& bv2int_var_map): 
         ctx(c),
+        m_is_signed(is_signed),
         m_vars(c),
         m_UF_counter(0),
         m_bv2int_var_map(bv2int_var_map)
@@ -70,7 +71,7 @@ namespace multi_theory_horn {
                 // We only support constants (vars) of Bit-vector sort!
                 assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
                 unsigned k = e.get_sort().bv_size();
-                create_lemma(r, k);
+                create_bound_lemma(r, k);
                 m_vars.push_back(r);
             }
             else if (is_special_basic(e)) {
@@ -115,7 +116,7 @@ namespace multi_theory_horn {
         switch (f) {
             case Z3_OP_BNUM:
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
-                r = ctx.int_val(e.get_numeral_int());
+                r = (m_is_signed) ? ctx.int_val(e.get_numeral_int()) : ctx.int_val(e.get_numeral_uint());
                 break;
             case Z3_OP_BNEG:
                 k = e.arg(0).get_sort().bv_size();
@@ -286,28 +287,20 @@ namespace multi_theory_horn {
         z3::expr r(ctx);
         switch (f) {
             case Z3_OP_ULEQ:
+            case Z3_OP_SLEQ:
                 r = args[0] <= args[1];
                 break;
-            case Z3_OP_SLEQ:
-                r = uts(args[0], k) <= uts(args[1], k);
-                break;
             case Z3_OP_UGEQ:
+            case Z3_OP_SGEQ:
                 r = args[0] >= args[1];
                 break;
-            case Z3_OP_SGEQ:
-                r = uts(args[0], k) >= uts(args[1], k);
-                break;
             case Z3_OP_ULT:
+            case Z3_OP_SLT:
                 r = args[0] < args[1];
                 break;
-            case Z3_OP_SLT:
-                r = uts(args[0], k) < uts(args[1], k);
-                break;
             case Z3_OP_UGT:
-                r = args[0] > args[1];
-                break;
             case Z3_OP_SGT:
-                r = uts(args[0], k) > uts(args[1], k);
+                r = args[0] > args[1];
                 break;
             default:
                 ASSERT_FALSE("Unsupported BV signed relation operation");
@@ -403,9 +396,8 @@ namespace multi_theory_horn {
         z3::func_decl uf = ctx.function(uf_name.c_str(), ctx.int_sort(), ctx.int_sort(), ctx.int_sort());
         z3::expr res = uf(arg1, arg2);
 
-        // Bound lemma: 0 <= res < 2^k
-        uint64_t N = (uint64_t)1 << k;
-        m_lemmas.push_back(res >= ctx.int_val(0) && res < ctx.int_val(N));
+        // Bound lemma
+        create_bound_lemma(res, k);
 
         // per-bit lemmas
         for (unsigned i = 0; i < k; ++i) {
@@ -419,11 +411,12 @@ namespace multi_theory_horn {
     }
 
 
-    void Bv2IntTranslator::create_lemma(z3::expr& var, unsigned k) {
+    void Bv2IntTranslator::create_bound_lemma(z3::expr& var, unsigned k) {
         // Create a lemma for the variable var, which is an Int variable
-        // with bounds [0, 2^k - 1]
-        uint64_t N = (uint64_t)1 << k;
-        z3::expr lemma = (var >= ctx.int_val(0)) && (var < ctx.int_val(N));
+        // with bounds [0, 2^k - 1] if unsigned, or [-2^(k-1), 2^(k-1) - 1] if signed.
+        int64_t N = (int64_t)1 << k;
+        z3::expr lemma = (m_is_signed) ? (var >= ctx.int_val(0)) && (var < ctx.int_val(N)) 
+                                       : (var > ctx.int_val(-N)) && (var < ctx.int_val(N));
         m_lemmas.push_back(lemma);
     }
 
