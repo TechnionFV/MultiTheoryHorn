@@ -5,35 +5,13 @@
 using namespace z3;
 using namespace multi_theory_horn;
 
-expr bounds(context& c, const expr& e, unsigned int k) {
+expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
+    if (is_signed) {
+        int N = (uint64_t)1 << (k - 1);
+        return (c.int_val(-N) <= e) && (e < c.int_val(N));
+    }
     uint64_t N = (uint64_t)1 << k;
     return (c.int_val(0) <= e) && (e < c.int_val(N));
-}
-
-expr uts(context& c, const expr& e, unsigned int k) {
-    uint64_t N = (uint64_t)1 << k - 1;
-    /*
-    if (e.is_numeral()) { // If e is a numeral, we can compute directly
-        return (c.int_val(2 * (e.get_numeral_int() % N)) - e).simplify();
-    }
-    */
-    return ((c.int_val(2) * (mod(e, c.int_val(N)))) - e).simplify();
-}
-
-// Use this version of ust with caution, and only when overflow or underflow cannot occur.
-expr uts_no_mod(context& c, const expr& e, unsigned int k) {
-    uint64_t N = (uint64_t)1 << k - 1;
-    /*
-    if (e.is_numeral()) { // If e is a numeral, we can compute directly
-        int M = e.get_numeral_int();
-        if (M < N) {
-            return e;
-        }
-        return (c.int_val(2 * (M - N)) - c.int_val(M)).simplify();
-    }
-    */
-    uint64_t Npow = (uint64_t)N << 1;
-    return ite(e < c.int_val(N), e, e - c.int_val(Npow)).simplify();
 }
 
 check_result max_bv(unsigned int size) {
@@ -139,7 +117,7 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
 
     // int rules
     // x > y, x - y >= z, bounds(x), bounds(y), bounds(z) --> p(y,z,x,0)
-    expr rule1_int = forall(x_int, y_int, z_int, implies((x_int > y_int) && (x_int - y_int >= z_int) && bounds(c,x_int,size) && bounds(c, y_int, size) && bounds(c, z_int, size), p_int(y_int, z_int, x_int, c.int_val(0))));
+    expr rule1_int = forall(x_int, y_int, z_int, implies((x_int > y_int) && (x_int - y_int >= z_int) && bounds(c, x_int, false, size) && bounds(c, y_int, false, size) && bounds(c, z_int, false, size), p_int(y_int, z_int, x_int, c.int_val(0))));
     symbol name1 = c.str_symbol("rule1_int");
     mtfp.add_rule(rule1_int, Theory::IAUF, name1);
 
@@ -272,18 +250,18 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
     expr b_bv = c.bv_const("b_bv", size);
 
     // int rules
-    // uts(x) > 0, bounds(x) --> p(x,0,0)
-    expr rule1_int = forall(x_int, implies(uts_no_mod(c,x_int,size) > 0 && bounds(c,x_int,size), p_int(x_int, c.int_val(0), c.int_val(0))));       
+    // x > 0, bounds(x) --> p(x,0,0)
+    expr rule1_int = forall(x_int, implies(x_int > 0 && bounds(c,x_int,true,size), p_int(x_int, c.int_val(0), c.int_val(0))));
     symbol name1 = c.str_symbol("rule1_int");
     mtfp.add_rule(rule1_int, Theory::IAUF, name1);
 
-    // p(x,a,b), uts(a) < uts(x) --> p(x,a + 1,b - 1)
-    expr rule2_int = forall(x_int, a_int, b_int, implies(p_int(x_int, a_int, b_int) && (uts_no_mod(c, a_int, size) < uts_no_mod(c, x_int, size)), p_int(x_int, a_int + 1, b_int - 1)));      
+    // p(x,a,b), a < x --> p(x,a + 1,b - 1)
+    expr rule2_int = forall(x_int, a_int, b_int, implies(p_int(x_int, a_int, b_int) && (a_int < x_int), p_int(x_int, a_int + 1, b_int - 1)));
     symbol name2 = c.str_symbol("rule2_int");
     mtfp.add_rule(rule2_int, Theory::IAUF, name2);
 
-    // p(x,a,b), !(uts(a) < uts(x)) --> q(a,b)
-    expr rule3_int = forall(x_int, a_int, b_int, implies(p_int(x_int, a_int, b_int) && !(uts_no_mod(c, a_int, size) < uts_no_mod(c, x_int, size)), q_int(a_int, b_int)));       
+    // p(x,a,b), !(a < x) --> q(a,b)
+    expr rule3_int = forall(x_int, a_int, b_int, implies(p_int(x_int, a_int, b_int) && !(a_int < x_int), q_int(a_int, b_int)));
     symbol name3 = c.str_symbol("rule3_int");
     mtfp.add_rule(rule3_int, Theory::IAUF, name3);
 
@@ -417,19 +395,19 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     symbol name2 = c.str_symbol("rule2_int");
     mtfp.add_rule(rule2_int, Theory::IAUF, name2);
 
-    // q'(x',y',i), uts(i) < uts(y') --> q(x',y',i + 1)
-    expr rule3_int = forall(x_int, y_int, i_int, implies(q_int(x_int, y_int, i_int) && (uts_no_mod(c, i_int, size) < uts_no_mod(c, y_int, size)), q_int(x_int, y_int, i_int + 1)));      
+    // q'(x',y',i), i < y' --> q(x',y',i + 1)
+    expr rule3_int = forall(x_int, y_int, i_int, implies(q_int(x_int, y_int, i_int) && (i_int < y_int), q_int(x_int, y_int, i_int + 1)));
     symbol name3 = c.str_symbol("rule3_int");
     mtfp.add_rule(rule3_int, Theory::IAUF, name3);
 
     // int query
-    // q'(x',y',i), !(uts(i) < uts(y')), !(uts(x') <= uts(i)) --> false
+    // q'(x',y',i), !(i < y'), !(x' <= i) --> false
     expr_vector query_vars(c);
     query_vars.push_back(x_int);
     query_vars.push_back(y_int);
     query_vars.push_back(i_int);
     expr query_int_pred = q_int(x_int, y_int, i_int);
-    expr query_int_phi = !(uts_no_mod(c, i_int, size) < uts_no_mod(c, y_int, size)) && !(uts_no_mod(c, x_int, size) <= uts_no_mod(c, i_int, size));
+    expr query_int_phi = !(i_int < y_int) && !(x_int <= i_int);
     check_result result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);      
 
     if (result == sat) {
@@ -472,11 +450,13 @@ check_result cond_negate_bv(unsigned int size) {
     expr b = c.bv_const("b", size);
 
     // Rules
-    expr rule1 = forall(x, y, implies(x > y && y > c.bv_val(0, size), p(x, y, c.bv_val(0, size))));     // x > y, y > 0 --> p(x,y,0)
+    // x > y, y > 0 --> p(x,y,0)
+    expr rule1 = forall(x, y, implies(x > y && y > c.bv_val(0, size), p(x, y, c.bv_val(0, size))));     
     symbol name1 = c.str_symbol("rule1");
     fp.add_rule(rule1, name1);
 
-    expr rule2 = forall(x, y, i, implies(p(x, y, i) && (i < y), p(x, y, i + 2)));      // p(x,y,i), i < y --> p(x,y,i + 2)
+    // p(x,y,i), i < y --> p(x,y,i + 2)
+    expr rule2 = forall(x, y, i, implies(p(x, y, i) && (i < y), p(x, y, i + 2)));      
     symbol name2 = c.str_symbol("rule2");
     fp.add_rule(rule2, name2);
 
@@ -533,18 +513,18 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
     expr b_bv = c.bv_const("b_bv", size);
 
     // int rules
-    // uts(x) > uts(y), uts(y) > 0, bounds(x), bounds(y) --> p(x,y,0)
-    expr rule1_int = forall(x_int, y_int, implies(uts_no_mod(c,x_int,size) > uts_no_mod(c, y_int, size) && uts_no_mod(c, y_int, size) > 0 && bounds(c,x_int,size) && bounds(c, y_int, size),  p_int(x_int, c.int_val(0), c.int_val(0))));
+    // x > y, y > 0, bounds(x), bounds(y) --> p(x,y,0)
+    expr rule1_int = forall(x_int, y_int, implies(x_int > y_int && y_int > 0 && bounds(c, x_int, true, size) && bounds(c, y_int, true, size), p_int(x_int, c.int_val(0), c.int_val(0))));
     symbol name1 = c.str_symbol("rule1_int");
     mtfp.add_rule(rule1_int, Theory::IAUF, name1);
 
-    // p(x,y,i), uts(i) < uts(y) --> p(x,y,i + 2)
-    expr rule2_int = forall(x_int, y_int, i_int, implies(p_int(x_int, y_int, i_int) && (uts_no_mod(c, i_int, size) < uts_no_mod(c, y_int, size)), p_int(x_int, y_int, i_int + 2)));
+    // p(x,y,i), i < y --> p(x,y,i + 2)
+    expr rule2_int = forall(x_int, y_int, i_int, implies(p_int(x_int, y_int, i_int) && (i_int < y_int), p_int(x_int, y_int, i_int + 2)));
     symbol name2 = c.str_symbol("rule2_int");
     mtfp.add_rule(rule2_int, Theory::IAUF, name2);
 
-    // p(x,y,i), !(uts(i) < uts(y)) --> q(x,i)
-    expr rule3_int = forall(x_int, y_int, i_int, implies(p_int(x_int, y_int, i_int) && !(uts_no_mod(c, i_int, size) < uts_no_mod(c, y_int, size)), q_int(x_int, i_int)));
+    // p(x,y,i), !(i < y) --> q(x,i)
+    expr rule3_int = forall(x_int, y_int, i_int, implies(p_int(x_int, y_int, i_int) && !(i_int < y_int), q_int(x_int, i_int)));
     symbol name3 = c.str_symbol("rule3_int");
     mtfp.add_rule(rule3_int, Theory::IAUF, name3);
 
@@ -857,7 +837,7 @@ int main() {
         //cond_negate_bv(size);
         //cond_negate_multi(size);
         //swap_bv(size);
-        //swap_multi(size);       
+        //swap_multi(size);
     }
     catch (exception& ex) {
         std::cout << "unexpected error: " << ex << "\n";
