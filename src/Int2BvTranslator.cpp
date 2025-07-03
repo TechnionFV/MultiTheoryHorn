@@ -138,15 +138,14 @@ namespace multi_theory_horn {
                 r = args[0] * args[1];
                 break;
             case Z3_OP_IDIV:
-                r = args[0] / args[1];
+                r = (m_is_signed) ? args[0] / args[1] : z3::udiv(args[0], args[1]);
                 break;          
             case Z3_OP_REM:
-                // Use signed version of rem
-                r = srem(args[0], args[1]);
+                r = (m_is_signed) ? srem(args[0], args[1]) : z3::urem(args[0], args[1]);
                 break;
             case Z3_OP_MOD:
-                // Use signed version of mod
-                r = smod(args[0], args[1]);
+                // TODO: Make sure the umod case is correct
+                r = (m_is_signed) ? smod(args[0], args[1]) : args[0] % args[1];
                 break;
             case Z3_OP_POWER:
             case Z3_OP_ABS:
