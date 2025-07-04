@@ -201,6 +201,13 @@ namespace multi_theory_horn {
                 r = umod(args[0] / ctx.int_val(divL), high - low + 1);
                 break;
             }
+            case Z3_OP_BIT2BOOL: {
+                z3::parameter p(e, 0);
+                unsigned bit_index = p.get_int();
+                unsigned divL = (uint64_t)1 << (bit_index);
+                r = (umod(args[0] / ctx.int_val(divL), 1) == ctx.int_val(1));
+                break;
+            }
             case Z3_OP_ZERO_EXT: {
                 // Zero extension doesn't change the underlying integer value
                 r = args[0];
@@ -234,7 +241,6 @@ namespace multi_theory_horn {
                 ASSERT_FALSE("Implement only if needed");
                 break;
 
-            case Z3_OP_BIT2BOOL:
             case Z3_OP_SBV2INT:
             case Z3_OP_CARRY:
             case Z3_OP_XOR3:
