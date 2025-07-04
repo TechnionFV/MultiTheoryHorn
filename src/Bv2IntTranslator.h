@@ -16,6 +16,7 @@ namespace multi_theory_horn {
 
     class Bv2IntTranslator {
         z3::context&      ctx;
+        unsigned          m_bv_size; // Size of the bit-vector expressions
         bool              m_is_signed; // Whether to treat bit-vectors as signed or unsigned
         bool              m_simplify; // Whether to simplify the translated expressions
 
@@ -59,7 +60,7 @@ namespace multi_theory_horn {
         void create_bound_lemma(z3::expr& var, unsigned k);
     public:
         explicit Bv2IntTranslator(z3::context& c, bool is_signed,
-                                  bool simplify = true,
+                                  unsigned bv_size, bool simplify = true,
                                   const VarMap& bv2int_var_map = VarMap());
         void reset();
 
