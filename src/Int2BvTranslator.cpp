@@ -52,7 +52,7 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else { // is_app
-            if (e.is_const() && !e.is_numeral()) {
+            if (e.is_const() && !e.is_numeral() && !e.is_bool()) {
                 // Note: numerals are handled in translate_bv: Z3_OP_ANUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();

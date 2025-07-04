@@ -4,10 +4,11 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, bool simplify, const VarMap& bv2int_var_map): 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, unsigned bv_size, bool simplify, const VarMap& bv2int_var_map): 
         ctx(c),
         m_is_signed(is_signed),
         m_simplify(simplify),
+        m_bv_size(bv_size),
         m_vars(c),
         m_UF_counter(0),
         m_bv2int_var_map(bv2int_var_map)
@@ -58,7 +59,7 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else { // is_app
-            if (e.is_const() && !e.is_numeral()) {
+            if (e.is_const() && !e.is_numeral() && !e.is_bool()) {
                 // Note: numerals are handled in translate_bv: Z3_OP_BNUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
@@ -116,10 +117,13 @@ namespace multi_theory_horn {
         unsigned k;
         uint64_t N;
         switch (f) {
-            case Z3_OP_BNUM:
+            case Z3_OP_BNUM: {
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
-                r = (m_is_signed) ? ctx.int_val(e.get_numeral_int()) : ctx.int_val(e.get_numeral_uint());
+                int raw = e.get_numeral_int();
+                int signed_val = sign_extend(raw, m_bv_size);
+                r = (m_is_signed) ? ctx.int_val(signed_val) : ctx.int_val(raw);
                 break;
+            }
             case Z3_OP_BNEG:
                 k = e.arg(0).get_sort().bv_size();
                 N = (uint64_t)1 << k;
