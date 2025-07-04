@@ -4,9 +4,10 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, const VarMap& bv2int_var_map): 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, bool simplify, const VarMap& bv2int_var_map): 
         ctx(c),
         m_is_signed(is_signed),
+        m_simplify(simplify),
         m_vars(c),
         m_UF_counter(0),
         m_bv2int_var_map(bv2int_var_map)
@@ -95,7 +96,8 @@ namespace multi_theory_horn {
         }
 
         // Simplify the result expression
-        r = r.simplify();
+        if (m_simplify)
+            r = r.simplify();
         m_translate.emplace(key, r);
         return r;
     }
