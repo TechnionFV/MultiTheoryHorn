@@ -18,6 +18,7 @@ namespace multi_theory_horn {
         z3::context&      ctx;
         unsigned          m_bv_size; // Size of the BV type to translate to
         bool              m_is_signed; // Whether to treat integers as signed or unsigned
+        bool              m_simplify; // Whether to simplify the translated expressions
         
         z3::expr_vector m_vars;
         // A map which tells us where to map each variable we find
@@ -37,7 +38,9 @@ namespace multi_theory_horn {
         z3::expr translate_special_basic(const z3::expr& e);
 
     public:
-        explicit Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size, const VarMap& bv2int_var_map = VarMap());
+        explicit Int2BvTranslator(z3::context& c, bool is_signed,
+                                  unsigned bv_size, bool simplify = true,
+                                  const VarMap& bv2int_var_map = VarMap());
 
         // This must be invoked before starting a new translation
         // It clears the cache and resets the translator state
