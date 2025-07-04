@@ -87,7 +87,7 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ false, size);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, int_sort, bool_sort);
@@ -133,7 +133,7 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
 
     // interface constraint int - - -> bv
     // q(y,a) - - - -> q'(y',a')
-    mtfp.add_interface_constraint(q_int, Theory::IAUF, q_bv, Theory::BV);       
+    mtfp.add_interface_constraint(q_int(y_int, a_int), Theory::IAUF, q_bv(y_bv, a_bv), Theory::BV);       
 
     // bv query
     // q'(y',a'), !(a' == max(y',a')) --> false
@@ -142,7 +142,7 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
     query_vars.push_back(a_bv);
     expr query_bv_pred = q_bv(y_bv, a_bv);
     expr query_bv_phi =  !(a_bv == (a_bv ^ ((a_bv ^ y_bv) & ite(ult(a_bv, y_bv), c.bv_val(-1, size), c.bv_val(0, size)))));
-    check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);      
+    check_result result = mtfp.query(query_bv_pred, query_bv_phi, Theory::BV);      
 
     if (result == sat) {
         std::cout << "SAT: Bad state is reachable.\n";
@@ -226,7 +226,7 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, bool_sort);
@@ -267,7 +267,7 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
 
     // interface constraint int - - -> bv
     // q(a,b) - - - -> q'(a',b')
-    mtfp.add_interface_constraint(q_int, Theory::IAUF, q_bv, Theory::BV);       
+    mtfp.add_interface_constraint(q_int(a_int, b_int), Theory::IAUF, q_bv(a_bv, b_bv), Theory::BV);       
 
     // bv query
     // q'(a',b'), !(a,b have opposite signs) --> false
@@ -276,7 +276,7 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
     query_vars.push_back(b_bv);
     expr query_bv_pred = q_bv(a_bv, b_bv);
     expr query_bv_phi = !((a_bv ^ b_bv) < 0);
-    check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);      
+    check_result result = mtfp.query(query_bv_pred, query_bv_phi, Theory::BV);      
 
     if (result == sat) {
         std::cout << "SAT: Bad state is reachable.\n";
@@ -356,7 +356,7 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
 
     // Declare bv relations
     func_decl p_bv = function("p_bv", bv_sort, bv_sort, bool_sort);
@@ -382,12 +382,12 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     // bv rules
     // x != 2^(k-1), y == |x| --> p(x,y)
     uint64_t min_bv = (uint64_t)1 << (size - 1);
-    expr rule1_bv = forall(x_bv, y_bv, implies((x_bv != c.bv_val(min_bv, size)) && (y_bv == (c.bv_val(1, size) | ite(x_bv >= 0, c.bv_val(0, size), c.bv_val(-1, size))) * x_bv), p_bv(x_bv, y_bv, c.bv_val(0, size))));     
+    expr rule1_bv = forall(x_bv, y_bv, implies((x_bv != c.bv_val(min_bv, size)) && (y_bv == (c.bv_val(1, size) | ite(x_bv >= 0, c.bv_val(0, size), c.bv_val(-1, size))) * x_bv), p_bv(x_bv, y_bv)));     
     symbol name1 = c.str_symbol("rule1_bv");
     mtfp.add_rule(rule1_bv, Theory::BV, name1);
 
     // interface constraint bv - - -> int
-    mtfp.add_interface_constraint(p_bv, Theory::BV, p_int, Theory::IAUF);
+    mtfp.add_interface_constraint(p_bv(x_bv, y_bv), Theory::BV, p_int(x_int, y_int), Theory::IAUF);
 
     // int rules
     // p'(x,y) --> q'(x',y',0)
@@ -408,7 +408,7 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     query_vars.push_back(i_int);
     expr query_int_pred = q_int(x_int, y_int, i_int);
     expr query_int_phi = !(i_int < y_int) && !(x_int <= i_int);
-    check_result result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);      
+    check_result result = mtfp.query(query_int_pred, query_int_phi, Theory::IAUF);      
 
     if (result == sat) {
         std::cout << "SAT: Bad state is reachable.\n";
@@ -488,7 +488,7 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, bool_sort);
@@ -530,7 +530,7 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
 
     // interface constraint int - - -> bv
     // q(x,i) - - - -> q'(x',i')
-    mtfp.add_interface_constraint(q_int, Theory::IAUF, q_bv, Theory::BV);
+    mtfp.add_interface_constraint(q_int(x_int, i_int), Theory::IAUF, q_bv(x_bv, i_bv), Theory::BV);
 
     // bv query
     // q'(x',i'), b == ite(i' <= x',1,0), !((x' ^ (-b)) + b == -x') --> false
@@ -540,7 +540,7 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
     query_vars.push_back(b_bv);
     expr query_bv_pred = q_bv(x_bv, i_bv);
     expr query_bv_phi = (b_bv == ite(i_bv <= x_bv, c.bv_val(1, size), c.bv_val(0, size))) && !(((x_bv ^ (-b_bv)) + b_bv) == -x_bv);
-    check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
+    check_result result = mtfp.query(query_bv_pred, query_bv_phi, Theory::BV);
 
     if (result == sat) {
         std::cout << "SAT: Bad state is reachable.\n";
@@ -688,7 +688,7 @@ check_result swap_multi(unsigned int size) {      // bv - - -> int, unsigned var
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ false, size);
 
     // Declare bv relations
     func_decl p0_bv = function("p0_bv", bv_sort, bv_sort, bv_sort, bool_sort);
@@ -779,10 +779,10 @@ check_result swap_multi(unsigned int size) {      // bv - - -> int, unsigned var
 
     // interface constraint bv - - -> int
     // p3(x,y,z) - - - -> p3_int(x',y',z')
-    mtfp.add_interface_constraint(p3_bv, Theory::BV, p3_int, Theory::IAUF);
+    mtfp.add_interface_constraint(p3_bv(x, y, z), Theory::BV, p3_int(x_int, y_int, z_int), Theory::IAUF);
 
     // p3_int(x,y,z) --> p3'_int(x,y,z,0)
-    expr rule8_int = forall(x_int, y_int, z_int, implies(p3_int(x_int, y_int, z), p3prime_int(x_int, y_int, z_int, c.int_val(0))));
+    expr rule8_int = forall(x_int, y_int, z_int, implies(p3_int(x_int, y_int, z_int), p3prime_int(x_int, y_int, z_int, c.int_val(0))));
     symbol name8 = c.str_symbol("rule8_int");
     mtfp.add_rule(rule8_int, Theory::IAUF, name8);
 
@@ -810,7 +810,9 @@ check_result swap_multi(unsigned int size) {      // bv - - -> int, unsigned var
     query_vars.push_back(b_int);
     expr query_int_pred = p4_int(x_int, z_int, a_int, b_int);
     expr query_int_phi = !(b_int < z_int - x_int) && !(a_int < b_int);
-    check_result result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);
+    
+    check_result result;
+    result = mtfp.query(query_int_pred, query_int_phi, Theory::IAUF);
 
     if (result == sat) {
         std::cout << "SAT: Bad state is reachable.\n";
@@ -837,7 +839,7 @@ int main() {
         //cond_negate_bv(size);
         //cond_negate_multi(size);
         //swap_bv(size);
-        //swap_multi(size);
+        swap_multi(size);
     }
     catch (exception& ex) {
         std::cout << "unexpected error: " << ex << "\n";
