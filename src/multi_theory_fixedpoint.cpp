@@ -184,17 +184,18 @@ namespace multi_theory_horn {
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
-    z3::check_result MT_fixedpoint::query(z3::expr& q_pred, z3::expr& q_phi, Theory theory) {
+    z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory) {
         struct QueryConfig {
+            z3::expr_vector vars; // The variables in the query
             z3::expr p; // The query's predicate expression
             z3::expr phi; // The query's phi formula expression
             Theory i; // The theory we're currently processing
-            QueryConfig(z3::expr& _p, z3::expr& _phi, Theory _i)
-                : p(_p), phi(_phi), i(_i) {}
+            QueryConfig(z3::expr_vector& _vars, z3::expr& _p, z3::expr& _phi, Theory _i)
+                : vars(_vars), p(_p), phi(_phi), i(_i) {}
         };
 
         std::stack<QueryConfig> S;
-        S.push(QueryConfig(q_pred, q_phi, theory)); // line 2
+        S.push(QueryConfig(vars, q_pred, q_phi, theory)); // line 2
 
         while (!S.empty()) { // line 3
             QueryConfig config = S.top(); // line 4
@@ -204,12 +205,12 @@ namespace multi_theory_horn {
             z3::expr p_query(m_ctx);
             z3::check_result res;
             if (config.i == Theory::IAUF) {
-                p_query = z3::exists(config.p.args(), config.p && config.phi);
+                p_query = z3::exists(config.vars, config.p && config.phi);
                 DEBUG_MSG(std::cout << "Integer engine:\n" << engine_int() << std::endl);
                 DEBUG_MSG(std::cout << "Querying integer engine with:\n" << p_query << std::endl);
                 res = engine_int().query(p_query);
             } else if (config.i == Theory::BV) {
-                p_query = z3::exists(config.p.args(), config.p && config.phi);
+                p_query = z3::exists(config.vars, config.p && config.phi);
                 DEBUG_MSG(std::cout << "Bit-vector engine:\n" << engine_bv() << std::endl);
                 DEBUG_MSG(std::cout << "Querying bit-vector engine with:\n" << p_query << std::endl);
                 res = engine_bv().query(p_query);
@@ -323,7 +324,7 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
 
-                        S.push(QueryConfig(q_tag_new, phi_trans, next_theory));
+                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
                     }
                     else { // line 16
                         // line 17
@@ -365,7 +366,7 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
                         
-                        S.push(QueryConfig(q_tag_new, phi_trans, next_theory));
+                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
                     }
                     else { // line 16
                         // line 17
