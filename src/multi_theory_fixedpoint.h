@@ -109,10 +109,11 @@ namespace multi_theory_horn {
         /// \brief The query method for the multi-theory fixedpoint engine.
         /// The query should be over theory2 as the second theory
         /// is our starting point of the "backward" query algorithm.
+        /// \param vars The vector of variables to be used in the query.
         /// \param q_pred The predicate in the body of the query.
         /// \param q_phi The formula to be queried.
         /// \param theory The theory indicating the engine to which the query belongs.
-        z3::check_result query(z3::expr& q_pred, z3::expr& q_phi, Theory theory);
+        z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory);
 
         //--------------------------------------------------------------------------
         // Forwarding of fixepoint most common calles
