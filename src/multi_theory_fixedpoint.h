@@ -47,6 +47,7 @@ namespace multi_theory_horn {
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
         bool m_is_signed; // Whether to treat bit-vectors as signed or unsigned
+        bool m_simplify; // Whether to simplify the translations
 
         PredicateMap m_int2bv_map;
         PredicateMap m_bv2int_map;
@@ -96,7 +97,7 @@ namespace multi_theory_horn {
         //--------------------------------------------------------------------------
         // Construction / destruction
         //--------------------------------------------------------------------------
-        explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size);
+        explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool simplify = true);
 
         //--------------------------------------------------------------------------
         // Quick access to the underlying fixedpoint engine
