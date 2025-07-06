@@ -181,6 +181,10 @@ namespace multi_theory_horn {
         // Add a fact for the interface predicate in the second theory
         DEBUG_MSG(std::cout << "Adding interface constraint: " 
             << p1_expr << " ------> " << p2_expr << std::endl);
+        
+        // Initialize the strengthening expression of the source predicate to true
+        p_to_strengthening_expr_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
+
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
@@ -236,6 +240,11 @@ namespace multi_theory_horn {
                         z3::expr bv_p_interp = int2bv_t.translate(p_interp);
                         DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
 
+                        // Strengthen the strengthening expression
+                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != p_to_strengthening_expr_map.end());
+                        st_it->second = st_it->second && p_interp;
+
                         // Get all info
                         Z3_ast key = p_decl;
                         //! We assume at most one fact is registered for each predicate
@@ -271,6 +280,11 @@ namespace multi_theory_horn {
                         }
                         int_p_interp = int_p_interp && z3::mk_and(lemmas);
                         DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
+
+                        // Strengthen the strengthening expression
+                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != p_to_strengthening_expr_map.end());
+                        st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
@@ -324,7 +338,11 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
 
-                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
+                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+                        z3::expr query_phi = phi_trans || !(st_it->second);
+
+                        S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
                     }
                     else { // line 16
                         // line 17
@@ -366,7 +384,11 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
                         
-                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
+                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+                        z3::expr query_phi = phi_trans || !(st_it->second);
+
+                        S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
                     }
                     else { // line 16
                         // line 17

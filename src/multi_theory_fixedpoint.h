@@ -56,6 +56,7 @@ namespace multi_theory_horn {
 
         using CHCFactConfig = std::pair<CHC, z3::symbol>;
         std::unordered_map<Z3_ast, CHCFactConfig, AstHash, AstEq> p_to_fact_map;
+        std::map<z3::func_decl, z3::expr, compare_func_decl> p_to_strengthening_expr_map;
 
         std::string kAdded_fact_name = "__added_fact__";
         unsigned added_fact_counter = 0;
