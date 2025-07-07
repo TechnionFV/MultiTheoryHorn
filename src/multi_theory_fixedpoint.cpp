@@ -75,9 +75,10 @@ namespace multi_theory_horn {
     //==============================================================================
     //                              PUBLIC METHODS
     //==============================================================================
-    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size)
+    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool simplify)
         : m_ctx(ctx),m_fp_int(ctx), m_fp_bv(ctx),
-          m_bv_size(bv_size), m_is_signed(is_signed) {
+          m_bv_size(bv_size), m_is_signed(is_signed),
+          m_simplify(simplify) {
         // Set the solvers to use spacer engines for integer and bit-vector theories.
         z3::params p(ctx);
         p.set("engine", "spacer");
@@ -181,6 +182,10 @@ namespace multi_theory_horn {
         // Add a fact for the interface predicate in the second theory
         DEBUG_MSG(std::cout << "Adding interface constraint: " 
             << p1_expr << " ------> " << p2_expr << std::endl);
+        
+        // Initialize the strengthening expression of the source predicate to true
+        p_to_strengthening_expr_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
+
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
@@ -232,9 +237,14 @@ namespace multi_theory_horn {
                         DEBUG_MSG(std::cout << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
 
                         // Initialize the translator
-                        Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size);
+                        Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
                         z3::expr bv_p_interp = int2bv_t.translate(p_interp);
                         DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
+
+                        // Strengthen the strengthening expression
+                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != p_to_strengthening_expr_map.end());
+                        st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
@@ -261,7 +271,7 @@ namespace multi_theory_horn {
                         DEBUG_MSG(std::cout << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
                         
                         // Initialize the translator
-                        Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size);
+                        Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
                         z3::expr int_p_interp = bv2int_t.translate(p_interp);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
                         z3::expr_vector lemmas(m_ctx);
@@ -271,6 +281,11 @@ namespace multi_theory_horn {
                         }
                         int_p_interp = int_p_interp && z3::mk_and(lemmas);
                         DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
+
+                        // Strengthen the strengthening expression
+                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != p_to_strengthening_expr_map.end());
+                        st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
@@ -301,7 +316,7 @@ namespace multi_theory_horn {
                     z3::expr g_refutation = engine_int().get_answer();
                     DEBUG_MSG(std::cout << "Refutation:\n" << g_refutation << std::endl);
 
-                    Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size);
+                    Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
                     
                     // Extract the refutation leaf predicate
                     z3::expr q = get_refutation_leaf_pred(g_refutation);
@@ -324,7 +339,11 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
 
-                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
+                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+                        z3::expr query_phi = phi_trans || !(st_it->second);
+
+                        S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
                     }
                     else { // line 16
                         // line 17
@@ -336,7 +355,7 @@ namespace multi_theory_horn {
                     z3::expr g_refutation = engine_bv().get_answer();
                     DEBUG_MSG(std::cout << "Refutation:\n" << g_refutation << std::endl);
 
-                    Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size);
+                    Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
 
                     // Extract the refutation leaf predicate
                     z3::expr q = get_refutation_leaf_pred(g_refutation);
@@ -366,7 +385,11 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
                         
-                        S.push(QueryConfig(translated_vars, q_tag_new, phi_trans, next_theory));
+                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+                        z3::expr query_phi = phi_trans || !(st_it->second);
+
+                        S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
                     }
                     else { // line 16
                         // line 17

@@ -47,6 +47,7 @@ namespace multi_theory_horn {
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
         bool m_is_signed; // Whether to treat bit-vectors as signed or unsigned
+        bool m_simplify; // Whether to simplify the translations
 
         PredicateMap m_int2bv_map;
         PredicateMap m_bv2int_map;
@@ -56,6 +57,7 @@ namespace multi_theory_horn {
 
         using CHCFactConfig = std::pair<CHC, z3::symbol>;
         std::unordered_map<Z3_ast, CHCFactConfig, AstHash, AstEq> p_to_fact_map;
+        std::map<z3::func_decl, z3::expr, compare_func_decl> p_to_strengthening_expr_map;
 
         std::string kAdded_fact_name = "__added_fact__";
         unsigned added_fact_counter = 0;
@@ -95,7 +97,7 @@ namespace multi_theory_horn {
         //--------------------------------------------------------------------------
         // Construction / destruction
         //--------------------------------------------------------------------------
-        explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size);
+        explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool simplify = true);
 
         //--------------------------------------------------------------------------
         // Quick access to the underlying fixedpoint engine
