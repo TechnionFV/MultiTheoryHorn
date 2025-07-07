@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+build/
+bins/
+
+# MacOS specific files
+*.dSYM
+
+# Z3 related files
+.z3*
+
+# vscode
+.vscode/
