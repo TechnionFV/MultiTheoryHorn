@@ -953,32 +953,32 @@ check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variab
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, int_sort, bool_sort);
     func_decl q_int = function("q_int", int_sort, int_sort, int_sort, bool_sort);
-    func_decl r_int = function("r_int", int_sort, int_sort, bool_sort);
+    func_decl r_int = function("r_int", int_sort, int_sort, int_sort, int_sort, int_sort, bool_sort);
 
     // Declare bv relations
-    func_decl r0_bv = function("r0_bv", bv_sort, bv_sort, bool_sort);
-    func_decl r1_bv = function("r1_bv", bv_sort, bv_sort, bool_sort);
-    func_decl r2_bv = function("r2_bv", bv_sort, bv_sort, bool_sort);
-    func_decl r3_bv = function("r3_bv", bv_sort, bv_sort, bool_sort);
+    func_decl r0_bv = function("r0_bv", bv_sort, bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
 
     // Register relations
     mtfp.register_relation(p_int, Theory::IAUF);
     mtfp.register_relation(q_int, Theory::IAUF);
     mtfp.register_relation(r_int, Theory::IAUF);
     mtfp.register_relation(r0_bv, Theory::BV);
-    mtfp.register_relation(r1_bv, Theory::BV);
-    mtfp.register_relation(r2_bv, Theory::BV);
-    mtfp.register_relation(r3_bv, Theory::BV);
 
     // int variables
     expr x_int = c.int_const("x_int");
     expr y_int = c.int_const("y_int");
     expr a_int = c.int_const("a_int");
     expr b_int = c.int_const("b_int");
+    expr c_int = c.int_const("c_int");
+    expr d_int = c.int_const("d_int");
+    expr e_int = c.int_const("e_int");
 
     // bv variables
     expr a_bv = c.bv_const("a_bv", size);
     expr b_bv = c.bv_const("b_bv", size);
+    expr c_bv = c.bv_const("c_bv", size);
+    expr d_bv = c.bv_const("d_bv", size);
+    expr e_bv = c.bv_const("e_bv", size);
 
     // int rules
     // ugt(x,y), ugt(y,0) --> p(x,y,0,0)
@@ -1001,37 +1001,32 @@ check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variab
     symbol name4 = c.str_symbol("rule4_int");
     mtfp.add_rule(rule4_int, Theory::IAUF, name4);
 
-    // q(x,a,b), !ult(a,x) --> r0(a,b)
-    expr rule5_int = forall(x_int, a_int, b_int, implies(q_int(x_int, a_int, b_int) && !(a_int < x_int), r_int(a_int, b_int)));
+    // q(x,a,b), !ult(a,x) --> r_int(a,b)
+    expr_vector rule5_vars(c);
+    rule5_vars.push_back(x_int);
+    rule5_vars.push_back(a_int);
+    rule5_vars.push_back(b_int);
+    rule5_vars.push_back(c_int);    
+    rule5_vars.push_back(d_int);
+    rule5_vars.push_back(e_int);
+    expr rule5_int = forall(rule5_vars, implies(q_int(x_int, a_int, b_int) && !(a_int < x_int), r_int(a_int, b_int, c_int, d_int, e_int)));
     symbol name5 = c.str_symbol("rule5_int");
     mtfp.add_rule(rule5_int, Theory::IAUF, name5);
 
     // interface constraint int - - -> bv
     // r_int(a,b) - - - -> r0(a',b')
-    mtfp.add_interface_constraint(r_int(a_int, b_int), Theory::IAUF, r0_bv(a_bv, b_bv), Theory::BV);
-
-    // r0(a,b) --> r1(a^b,b)
-    expr rule6_bv = forall(a_bv, b_bv, implies(r0_bv(a_bv, b_bv), r1_bv(a_bv ^ b_bv, b_bv)));
-    symbol name6 = c.str_symbol("rule6_bv");
-    mtfp.add_rule(rule6_bv, Theory::BV, name6);
-
-    // r1(a,b) --> r2(a,b^a)
-    expr rule7_bv = forall(a_bv, b_bv, implies(r1_bv(a_bv, b_bv), r2_bv(a_bv, b_bv ^ a_bv)));
-    symbol name7 = c.str_symbol("rule7_bv");
-    mtfp.add_rule(rule7_bv, Theory::BV, name7);
-
-    // r2(a,b) --> r3(a^b,b)
-    expr rule8_bv = forall(a_bv, b_bv, implies(r2_bv(a_bv, b_bv), r3_bv(a_bv ^ b_bv, b_bv)));
-    symbol name8 = c.str_symbol("rule8_bv");
-    mtfp.add_rule(rule8_bv, Theory::BV, name8);
+    mtfp.add_interface_constraint(r_int(a_int, b_int, c_int, d_int, e_int), Theory::IAUF, r0_bv(a_bv, b_bv, c_bv, d_bv, e_bv), Theory::BV);
 
     // bv query
-    // r3(a,b) && !(ult(a,b)) --> false
+    // r0(a,b,c,d,e) && c=a^b && d=c^b && e=c^d && !(ult(e,d)) --> false
     expr_vector query_vars(c);
     query_vars.push_back(a_bv);
     query_vars.push_back(b_bv);
-    expr query_bv_pred = r3_bv(a_bv, b_bv);
-    expr query_bv_phi = !(ult(a_bv, b_bv));
+    query_vars.push_back(c_bv);
+    query_vars.push_back(d_bv);
+    query_vars.push_back(e_bv);
+    expr query_bv_pred = r0_bv(a_bv, b_bv, c_bv, d_bv, e_bv);
+    expr query_bv_phi = (c_bv == (a_bv ^ b_bv)) && (d_bv == (c_bv ^ b_bv)) && (e_bv == (c_bv ^ d_bv)) && !(ult(e_bv, d_bv));
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
     if (result == sat) {
@@ -1049,7 +1044,7 @@ check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variab
 
 int main() {
     try {
-        unsigned int size = 32;
+        unsigned int size = 4;
         //max_bv(size);
         //max_multi(size);
         //opposite_signs_bv(size);
