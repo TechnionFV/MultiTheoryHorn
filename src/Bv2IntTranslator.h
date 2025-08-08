@@ -29,8 +29,6 @@ namespace multi_theory_horn {
         // in the expressions given through the translate method
         VarMap m_bv2int_var_map;
 
-        uint64_t m_UF_counter;
-
         // A set of lemmas specfiying the bounds on the new variables
         std::vector<z3::expr> m_lemmas;
 
@@ -57,7 +55,7 @@ namespace multi_theory_horn {
         z3::expr translate_basic(const z3::expr& e);
         z3::expr translate_special_basic(const z3::expr& e);
         
-        z3::expr create_bitwise_uf(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k);
+        z3::expr create_bitwise_sum(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k);
         void create_bound_lemma(z3::expr& var, unsigned k);
     public:
         explicit Bv2IntTranslator(z3::context& c, bool is_signed,
