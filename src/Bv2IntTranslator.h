@@ -37,6 +37,7 @@ namespace multi_theory_horn {
         z3::expr bseli(const z3::expr& e, unsigned i);
         z3::expr umod(const z3::expr& e, unsigned k);
         z3::expr uts(const z3::expr& e, unsigned k);
+        z3::expr stu(const z3::expr& e, unsigned k);
 
         // Custom implementation of common operations which could simplify
         // the final expression
