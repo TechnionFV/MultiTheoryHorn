@@ -70,6 +70,10 @@ namespace multi_theory_horn {
                     // Otherwise, create a new integer constant
                     r = ctx.int_const(name.c_str());
                 }
+
+                if (m_is_signed)
+                    r = stu(r, e.get_sort().bv_size());
+
                 // We only support constants (vars) of Bit-vector sort!
                 assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
                 unsigned k = e.get_sort().bv_size();
