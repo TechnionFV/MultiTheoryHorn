@@ -461,11 +461,12 @@ namespace multi_theory_horn {
             return ctx.int_val(1 << e.get_numeral_uint());
         }
         
-        // This is a strong assertion
-        // If e is not a numeral, the computation would be a series of if_eq
-        // TODO: If ultimately we want to support non-numeral exponents,
-        // TODO: we can observe Nikolaj's implementation of pow2 in the Z3 API
-        ASSERT_FALSE("Expected a numeral for exponent in pow2");
+        // Using z3::pw for exponentiation might produces real values because it's not
+        // guaranteed that the exponent is a positive integer! This could cause
+        // unepected behavior in case we don't handle reals properly.
+        // TODO: Handle this issue in case it's needed.
+        ASSERT_FALSE("Expected a numeral for exponent in pow2. ");
+        return e;
     }
 
     z3::expr Bv2IntTranslator::if_eq(const z3::expr& e, unsigned k, const z3::expr& th, const z3::expr& el){
