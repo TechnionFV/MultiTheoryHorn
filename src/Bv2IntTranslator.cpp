@@ -299,20 +299,28 @@ namespace multi_theory_horn {
         z3::expr r(ctx);
         switch (f) {
             case Z3_OP_ULEQ:
-            case Z3_OP_SLEQ:
                 r = args[0] <= args[1];
                 break;
+            case Z3_OP_SLEQ:
+                r = uts(args[0], k) <= uts(args[1], k);
+                break;
             case Z3_OP_UGEQ:
-            case Z3_OP_SGEQ:
                 r = args[0] >= args[1];
                 break;
+            case Z3_OP_SGEQ:
+                r = uts(args[0], k) >= uts(args[1], k);
+                break;
             case Z3_OP_ULT:
-            case Z3_OP_SLT:
                 r = args[0] < args[1];
                 break;
+            case Z3_OP_SLT:
+                r = uts(args[0], k) < uts(args[1], k);
+                break;
             case Z3_OP_UGT:
-            case Z3_OP_SGT:
                 r = args[0] > args[1];
+                break;
+            case Z3_OP_SGT:
+                r = uts(args[0], k) > uts(args[1], k);
                 break;
             default:
                 ASSERT_FALSE("Unsupported BV signed relation operation");
@@ -453,6 +461,10 @@ namespace multi_theory_horn {
     z3::expr Bv2IntTranslator::uts(const z3::expr& e, unsigned k) {
         // 2 * umod(e, k - 1) - e
         return (ctx.int_val(2) * umod(e, k - 1)) - e;
+    }
+
+    z3::expr Bv2IntTranslator::stu(const z3::expr& e, unsigned k) {
+        return umod(e, k);
     }
 
     z3::expr Bv2IntTranslator::pow2(const z3::expr& e) {
