@@ -10,7 +10,6 @@ namespace multi_theory_horn {
         m_simplify(simplify),
         m_bv_size(bv_size),
         m_vars(c),
-        m_UF_counter(0),
         m_bv2int_var_map(bv2int_var_map)
     {}
 
@@ -187,7 +186,7 @@ namespace multi_theory_horn {
             case Z3_OP_BNOR:
             case Z3_OP_BXNOR:
                 k = e.arg(1).get_sort().bv_size();
-                r = create_bitwise_uf(f, args[0], args[1], k);
+                r = create_bitwise_sum(f, args[0], args[1], k);
                 break;
 
             case Z3_OP_CONCAT:
@@ -361,51 +360,43 @@ namespace multi_theory_horn {
         return e.decl()(new_args);
     }
 
-    z3::expr Bv2IntTranslator::create_bitwise_uf(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k)
+    z3::expr Bv2IntTranslator::create_bitwise_sum(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k)
     {
-        // Information to infer
-        std::string opname;
         // bit_tt(a,b) builds the "1/0" truth table ite expression
         std::function<z3::expr(z3::expr,z3::expr)> bit_tt;
 
         switch (f) {
         case Z3_OP_BAND:
-            opname = "AND";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) && b == ctx.int_val(1), 
                             ctx.int_val(1), ctx.int_val(0));
                     };
             break;
         case Z3_OP_BOR:
-            opname = "OR";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) || b == ctx.int_val(1), 
                             ctx.int_val(1), ctx.int_val(0));
                     };
             break;
         case Z3_OP_BXOR:
-            opname = "XOR";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) ^ b == ctx.int_val(1), 
                             ctx.int_val(1), ctx.int_val(0));
                     };
             break;
         case Z3_OP_BNAND:
-            opname = "NAND";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) && b == ctx.int_val(1), 
                             ctx.int_val(0), ctx.int_val(1));
                     };
             break;
         case Z3_OP_BNOR:
-            opname = "NOR";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) || b == ctx.int_val(1), 
                             ctx.int_val(0), ctx.int_val(1));
                     };
             break;
         case Z3_OP_BXNOR:
-            opname = "XNOR";
             bit_tt = [&](z3::expr a, z3::expr b){
                         return ite(a == ctx.int_val(1) ^ b == ctx.int_val(1), 
                             ctx.int_val(0), ctx.int_val(1));
@@ -415,23 +406,16 @@ namespace multi_theory_horn {
             ASSERT_FALSE("unsupported bitwise op");
         }
 
-        // Build the uninterpreted function
-        std::string uf_name = "__UF_" + opname + "_" + std::to_string(m_UF_counter++);
-        z3::func_decl uf = ctx.function(uf_name.c_str(), ctx.int_sort(), ctx.int_sort(), ctx.int_sort());
-        z3::expr res = uf(arg1, arg2);
-
-        // Bound lemma
-        create_bound_lemma(res, k);
+        z3::expr sum = ctx.int_val(0);
 
         // per-bit lemmas
         for (unsigned i = 0; i < k; ++i) {
             z3::expr ai = bseli(arg1, i);
             z3::expr bi = bseli(arg2, i);
-            z3::expr ci = bseli(res, i);
-            m_lemmas.push_back(ci == bit_tt(ai, bi));
+            sum = sum + pow2(ctx.int_val(i)) * bit_tt(ai, bi);
         }
 
-        return res;
+        return sum;
     }
 
 
