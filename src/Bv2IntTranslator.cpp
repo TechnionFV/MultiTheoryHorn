@@ -38,6 +38,11 @@ namespace multi_theory_horn {
         return Z3_OP_ULEQ <= f && f <= Z3_OP_SGT && has_bv_arg;
     }
 
+    bool Bv2IntTranslator::is_const_variable(const z3::expr& e) const {
+        // Check if the expression is a variable (0-arity application)
+        return e.is_const() && !e.is_numeral() && !e.is_bool();
+    }
+
     z3::expr Bv2IntTranslator::translate(const z3::expr& e) {
         Z3_ast key = e; // implicit cast to Z3_ast
         auto it = m_translate.find(key);
@@ -58,7 +63,7 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else { // is_app
-            if (e.is_const() && !e.is_numeral() && !e.is_bool()) {
+            if (is_const_variable(e)) {
                 // Note: numerals are handled in translate_bv: Z3_OP_BNUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
@@ -343,7 +348,8 @@ namespace multi_theory_horn {
             // Equality
             z3::expr lhs = translate(e.arg(0));
             z3::expr rhs = translate(e.arg(1));
-            return lhs == rhs;
+            z3::expr res = simplify_equality_mod(lhs == rhs);
+            return res;
         }
         return e;
     }
@@ -479,4 +485,52 @@ namespace multi_theory_horn {
         return ite(e == ctx.int_val(k), th, el);
     }
 
+    z3::expr Bv2IntTranslator::simplify_equality_mod(const z3::expr& eq) {
+        uint64_t N = (uint64_t)1 << m_bv_size;
+        Z3_decl_kind f = eq.arg(0).decl().decl_kind();
+
+        // Early exit if the operator is not MOD
+        if (f != Z3_OP_MOD) {
+            return eq;
+        }
+
+        // Left-hand side of mod
+        z3::expr lhs = eq.arg(0).arg(0);
+        // Right-hand side of mod
+        z3::expr rhs = eq.arg(0).arg(1);
+
+        // Early exit if rhs is not a numeral or not equal to N, or lhs is not a constant variable
+        if (!rhs.is_numeral() || rhs.get_numeral_uint() != N  || !is_const_variable(lhs)) {
+            return eq;
+        }
+
+        // The right-hand side of the equality (mod result)
+        z3::expr m = eq.arg(1);
+
+        // Early exit if m is not a numeral
+        if (!m.is_numeral()) {
+            return eq;
+        }
+
+        int value = m.get_numeral_uint();
+        // Early exit in case the value in the interval [0, N-1]
+        if (value < 0 || value >= N) {
+            return eq;
+        }
+
+        // Handle signed values
+        if (m_is_signed) {
+            uint64_t max_signed_val = ((uint64_t)1 << (m_bv_size - 1)) - 1;
+
+            // If value is outside the signed range, adjust it
+            if (value > max_signed_val) {
+                value -= N;
+            }
+
+            // Return simplified equality
+            return lhs == value;
+        }
+
+        return lhs == value;
+    }
 } // namespace multi_theory_horn
