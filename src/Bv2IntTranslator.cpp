@@ -70,14 +70,14 @@ namespace multi_theory_horn {
                     r = ctx.int_const(name.c_str());
                 }
 
-                if (m_is_signed)
-                    r = stu(r, e.get_sort().bv_size());
-
                 // We only support constants (vars) of Bit-vector sort!
                 assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
                 unsigned k = e.get_sort().bv_size();
                 create_bound_lemma(r, k);
                 m_vars.push_back(r);
+
+                if (m_is_signed)
+                    r = stu(r, e.get_sort().bv_size());
             }
             else if (is_special_basic(e)) {
                 // Handle special basic cases: ite and eq
@@ -122,9 +122,8 @@ namespace multi_theory_horn {
         switch (f) {
             case Z3_OP_BNUM: {
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
-                int raw = e.get_numeral_int();
-                int signed_val = sign_extend(raw, m_bv_size);
-                r = (m_is_signed) ? ctx.int_val(signed_val) : ctx.int_val(raw);
+                unsigned int raw = e.get_numeral_uint();
+                r = ctx.int_val(raw);
                 break;
             }
             case Z3_OP_BNEG:
