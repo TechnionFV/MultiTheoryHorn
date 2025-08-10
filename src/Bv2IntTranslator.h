@@ -47,6 +47,7 @@ namespace multi_theory_horn {
         bool is_casting(const z3::expr& e) const;
         bool is_special_basic(const z3::expr& e) const;
         bool is_bv_relation(const z3::expr& e) const;
+        bool is_const_variable(const z3::expr& e) const;
 
         // Core translation routines
         z3::expr translate_bv(const z3::expr& e);
@@ -57,6 +58,15 @@ namespace multi_theory_horn {
         
         z3::expr create_bitwise_sum(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k);
         void create_bound_lemma(z3::expr& var, unsigned k);
+
+        /// @brief  The function's goal is to simplify the following equalities:
+        /// Signed:
+        ///         (x mod N) == N-3 --> x == -3
+        /// Unsigned:
+        ///         (x mod N) == N-3 --> x == N-3
+        /// @param eq The original modulo equality
+        /// @return The simplified expression if it's possible to simplify
+        z3::expr simplify_equality_mod(const z3::expr& eq);
     public:
         explicit Bv2IntTranslator(z3::context& c, bool is_signed,
                                   unsigned bv_size, bool simplify = true,
