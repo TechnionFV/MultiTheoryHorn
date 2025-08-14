@@ -177,7 +177,8 @@ namespace multi_theory_horn {
                 break;
             case Z3_OP_BSMOD:
             case Z3_OP_BSMOD_I:
-                ASSERT_FALSE("Signed modulus not implemented");
+                k = e.arg(1).get_sort().bv_size();
+                r = if_eq(args[1], 0, args[0], stu(uts(args[0], k) % uts(args[1], k), k));
                 break;
 
             case Z3_OP_BNOT:
