@@ -155,7 +155,9 @@ namespace multi_theory_horn {
             
             case Z3_OP_BSDIV:
             case Z3_OP_BSDIV_I:
-                ASSERT_FALSE("Signed division not implemented");
+                k = e.arg(1).get_sort().bv_size();
+                N = (uint64_t)1 << k;
+                r = if_eq(args[1], 0, ctx.int_val(N - 1), stu(uts(args[0], k) / uts(args[1], k), k));
                 break;
             case Z3_OP_BUDIV:
             case Z3_OP_BUDIV_I:
