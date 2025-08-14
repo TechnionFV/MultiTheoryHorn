@@ -167,12 +167,12 @@ namespace multi_theory_horn {
                 break;
             case Z3_OP_BSREM:
             case Z3_OP_BSREM_I:
-                ASSERT_FALSE("Signed remainder not implemented");
+                k = e.arg(1).get_sort().bv_size();
+                r = if_eq(args[1], 0, args[0], stu(rem(uts(args[0], k), uts(args[1], k)), k));
                 break;
             case Z3_OP_BUREM:
             case Z3_OP_BUREM_I:
                 k = e.arg(1).get_sort().bv_size();
-                N = (uint64_t)1 << k;
                 r = if_eq(args[1], 0, args[0], args[0] % args[1]);
                 break;
             case Z3_OP_BSMOD:
