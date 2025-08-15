@@ -146,8 +146,7 @@ namespace multi_theory_horn {
                 r = (m_is_signed) ? srem(args[0], args[1]) : z3::urem(args[0], args[1]);
                 break;
             case Z3_OP_MOD:
-                // TODO: Make sure the umod case is correct
-                r = (m_is_signed) ? smod(args[0], args[1]) : args[0] % args[1];
+                r = (m_is_signed) ? smod(args[0], args[1]) : z3::urem(args[0], args[1]);
                 break;
             case Z3_OP_POWER:
             case Z3_OP_ABS:
