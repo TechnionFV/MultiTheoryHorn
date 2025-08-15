@@ -1,5 +1,3 @@
-// Add not implemented macro
-
 #pragma once
 #include <cassert>
 #include <iostream>
@@ -64,7 +62,7 @@ namespace multi_theory_horn {
 
         std::optional<z3::func_decl> find_next(const z3::expr& src) const {
             // Look if there's a key that its value is the src argument
-            //! We assume that there's at one such key
+            //! We assume that there's at most one such key
             for (const auto& pair : Theta)
                 if (pair.second.decl().id() == src.decl().id())
                     return pair.first;
