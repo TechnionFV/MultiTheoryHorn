@@ -16,14 +16,14 @@ namespace multi_theory_horn {
         m_literals.clear();
     }
 
-    int Int2BvPreprocessor::num_of_conjuncts(const z3::expr& e) const {
+    int Int2BvPreprocessor::calc_num_of_conjuncts(const z3::expr& e) const {
         if (e.is_and()) {
             return e.num_args();
         }
         return 1;
     }
 
-    int Int2BvPreprocessor::num_of_disjuncts(const z3::expr& e) const {
+    int Int2BvPreprocessor::calc_num_of_disjuncts(const z3::expr& e) const {
         if (e.is_or()) {
             return e.num_args();
         }
@@ -110,7 +110,6 @@ namespace multi_theory_horn {
         return (term >= m_ctx.int_val(0)) && (term <= m_ctx.int_val(N - 1));
     }
 
-    // TODO: Consider deleting this if unused
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
         if (m_is_signed) {
@@ -123,7 +122,7 @@ namespace multi_theory_horn {
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {
-        int n_conjuncts = num_of_conjuncts(e);
+        int n_conjuncts = calc_num_of_conjuncts(e);
 
         m_const_out_of_bounds.resize(n_conjuncts);
         m_func_app_out_of_bounds.resize(n_conjuncts);
@@ -131,7 +130,7 @@ namespace multi_theory_horn {
 
         for (int i = 0; i < n_conjuncts; ++i) {
             z3::expr conjunct = (n_conjuncts == 1) ? e : e.arg(i);
-            int n_disjuncts = num_of_disjuncts(conjunct);
+            int n_disjuncts = calc_num_of_disjuncts(conjunct);
 
             m_const_out_of_bounds[i].resize(n_disjuncts, false);
             m_func_app_out_of_bounds[i].resize(n_disjuncts, z3::expr_vector(m_ctx));
@@ -176,13 +175,23 @@ namespace multi_theory_horn {
         }
     }
 
+    int Int2BvPreprocessor::get_num_of_conjuncts() const {
+        assert(m_literals.size() > 0 && "Data structures not populated");
+        return m_literals.size();
+    }
+
+    int Int2BvPreprocessor::get_num_of_disjuncts(int conjunct) const {
+        assert(conjunct >= 0 && conjunct < m_literals.size() && "Invalid conjunct index");
+        return m_literals[conjunct].size();
+    }
+
     z3::expr Int2BvPreprocessor::create_SAT_out_of_bounds_expr(const z3::expr& e) const {
         z3::expr bounds = z3::mk_and(m_vars_bound_lemmas);
         z3::expr rest = m_ctx.bool_val(false);
-        int n_conjuncts = m_const_out_of_bounds.size();
+        int n_conjuncts = get_num_of_conjuncts();
         
         for (int i = 0; i < n_conjuncts; ++i) {
-            int n_disjuncts = m_const_out_of_bounds[i].size();
+            int n_disjuncts = get_num_of_disjuncts(i);
             bool const_out_of_bounds = false;
             for (int j = 0; j < n_disjuncts; ++j) {
                 if(!m_const_out_of_bounds[i][j]) {
@@ -212,14 +221,60 @@ namespace multi_theory_horn {
         return res.simplify();
     }
 
+    z3::expr Int2BvPreprocessor::create_UNSAT_out_of_bounds_expr(const z3::expr& e) const {
+        z3::expr bounds = z3::mk_and(m_vars_bound_lemmas);
+        z3::expr rest = m_ctx.bool_val(true);
+        int n_conjuncts = get_num_of_conjuncts();
+        
+        for (int i = 0; i < n_conjuncts; ++i) {
+            int n_disjuncts = get_num_of_disjuncts(i);
+            bool const_out_of_bounds = true;
+            for (int j = 0; j < n_disjuncts; ++j) {
+                if(!m_const_out_of_bounds[i][j]) {
+                    const_out_of_bounds = false;
+                    break;
+                }
+            }
+
+            // An optimization instead of creating a large expression
+            if (const_out_of_bounds) {
+                continue;
+            }
+            else {
+                z3::expr conjunct = m_ctx.bool_val(false);
+                for (int j = 0; j < n_disjuncts; ++j) {
+                    conjunct = conjunct || m_literals[i][j];
+                }
+                z3::expr disjuncts = m_ctx.bool_val(false);
+                for (int j = 0; j < n_disjuncts; ++j) {
+                    if (m_const_out_of_bounds[i][j]) {
+                        continue;
+                    }
+                    
+                    disjuncts = disjuncts || z3::mk_or(m_func_app_out_of_bounds[i][j]);
+                }
+                rest = rest && (conjunct || disjuncts);
+            }
+        }
+        z3::expr res(m_ctx);
+        res = !e && bounds && rest;
+        return res;
+    }
+
     z3::expr Int2BvPreprocessor::create_SAT_out_of_bounds(const z3::expr& e) {
         populate_data_structures(e);
         return create_SAT_out_of_bounds_expr(e);
     }
 
+    z3::expr Int2BvPreprocessor::create_UNSAT_out_of_bounds(const z3::expr& e) {
+        populate_data_structures(e);
+        return create_UNSAT_out_of_bounds_expr(e);
+    }
+
     z3::expr Int2BvPreprocessor::preprocess(const z3::expr& e) {
         populate_data_structures(e);
         z3::expr psi = create_SAT_out_of_bounds_expr(e);
+        z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e);
         // TODO: Continue logic ...
         return psi;
     }

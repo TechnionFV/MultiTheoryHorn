@@ -50,6 +50,13 @@ struct SATOutOfBoundsTest {
     std::string name;
 };
 
+
+struct UNSATOutOfBoundsTest {
+    expr input;
+    expr expected;
+    std::string name;
+};
+
 // Run a batch of SATOutOfBounds tests
 void run_SATOutOfBounds_tests(context& c, Int2BvPreprocessor& preprocessor,
                               const std::string& bench_name,
@@ -60,6 +67,20 @@ void run_SATOutOfBounds_tests(context& c, Int2BvPreprocessor& preprocessor,
         std::string full_name = bench_name + " Test " + std::to_string(i+1) + ": " + test.name;
 
         expr preprocessed = preprocessor.create_SAT_out_of_bounds(test.input);
+        check_equivalent(c, preprocessed, test.expected, full_name);
+        preprocessor.reset(); // Reset preprocessor for next test
+    }
+}
+
+void run_UNSATOutOfBounds_tests(context& c, Int2BvPreprocessor& preprocessor,
+                                const std::string& bench_name,
+                                const std::vector<UNSATOutOfBoundsTest>& tests) 
+{
+    for (size_t i = 0; i < tests.size(); ++i) {
+        const auto& test = tests[i];
+        std::string full_name = bench_name + " Test " + std::to_string(i+1) + ": " + test.name;
+
+        expr preprocessed = preprocessor.create_UNSAT_out_of_bounds(test.input);
         check_equivalent(c, preprocessed, test.expected, full_name);
         preprocessor.reset(); // Reset preprocessor for next test
     }
@@ -78,6 +99,7 @@ int main(int argc, char* argv[]) {
     expr x = c.int_const("x");
     expr y = c.int_const("y");
 
+    // TODO: Test also the signed case
     Int2BvPreprocessor preprocessor(c, 4, false);
 
     // SATOutOfBounds tests
@@ -88,6 +110,13 @@ int main(int argc, char* argv[]) {
     };
 
     run_SATOutOfBounds_tests(c, preprocessor, "[SATOutOfBounds]", sat_tests);
+
+    std::vector<UNSATOutOfBoundsTest> unsat_tests = {
+        { x < (y + 1), c.bool_val(false), "x < y + 1" },
+        { (x <= y - 1) || (x >= y + 1), (x == 0 && y == 0) || (x == 15 && y == 15), "x <= y - 1 || x >= y + 1" }
+    };
+
+    run_UNSATOutOfBounds_tests(c, preprocessor, "[UNSATOutOfBounds]", unsat_tests);
 
     return 0;
 }

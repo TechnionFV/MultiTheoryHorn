@@ -33,8 +33,8 @@ namespace multi_theory_horn {
 
 
         // Returns the number of conjuncts in an expression
-        int num_of_conjuncts(const z3::expr& e) const;
-        int num_of_disjuncts(const z3::expr& e) const;
+        int calc_num_of_conjuncts(const z3::expr& e) const;
+        int calc_num_of_disjuncts(const z3::expr& e) const;
 
         bool is_const_variable(const z3::expr& e) const;
 
@@ -48,11 +48,17 @@ namespace multi_theory_horn {
 
         // The below functions assume the data structures are already populated
         z3::expr create_SAT_out_of_bounds_expr(const z3::expr& e) const;
+        z3::expr create_UNSAT_out_of_bounds_expr(const z3::expr& e) const;
+
     public:
         explicit Int2BvPreprocessor(z3::context& c, unsigned bv_size, bool is_signed);
         void reset();
 
+        int get_num_of_conjuncts() const;
+        int get_num_of_disjuncts(int conjunct) const;
+
         z3::expr create_SAT_out_of_bounds(const z3::expr& e);
+        z3::expr create_UNSAT_out_of_bounds(const z3::expr& e);
         z3::expr preprocess(const z3::expr& e);
     };
 } // namespace multi_theory_horn
