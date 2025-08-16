@@ -258,7 +258,7 @@ namespace multi_theory_horn {
         }
         z3::expr res(m_ctx);
         res = !e && bounds && rest;
-        return res;
+        return res.simplify();
     }
 
     z3::expr Int2BvPreprocessor::create_SAT_out_of_bounds(const z3::expr& e) {
