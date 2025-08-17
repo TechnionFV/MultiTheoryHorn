@@ -192,16 +192,16 @@ namespace multi_theory_horn {
         
         for (int i = 0; i < n_conjuncts; ++i) {
             int n_disjuncts = get_num_of_disjuncts(i);
-            bool const_out_of_bounds = false;
+            bool exists_const_in_bounds = false;
             for (int j = 0; j < n_disjuncts; ++j) {
                 if(!m_const_out_of_bounds[i][j]) {
-                    const_out_of_bounds = true;
+                    exists_const_in_bounds = true;
                     break;
                 }
             }
 
             // An optimization instead of creating a large expression
-            if (!const_out_of_bounds) {
+            if (!exists_const_in_bounds) {
                 continue;
             }
             else {
@@ -228,16 +228,16 @@ namespace multi_theory_horn {
         
         for (int i = 0; i < n_conjuncts; ++i) {
             int n_disjuncts = get_num_of_disjuncts(i);
-            bool const_out_of_bounds = true;
+            bool all_consts_out_of_bounds = true;
             for (int j = 0; j < n_disjuncts; ++j) {
                 if(!m_const_out_of_bounds[i][j]) {
-                    const_out_of_bounds = false;
+                    all_consts_out_of_bounds = false;
                     break;
                 }
             }
 
             // An optimization instead of creating a large expression
-            if (const_out_of_bounds) {
+            if (all_consts_out_of_bounds) {
                 continue;
             }
             else {
