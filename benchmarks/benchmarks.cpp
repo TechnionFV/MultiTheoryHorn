@@ -1,10 +1,33 @@
-#include <iostream>
+/*
+    When adding a benchmark:
+    - Function must take unsigned int (bv_size) and return check_result.
+    - Add its name/function to REGISTRY in run_benchmarks_cli.
+
+    Exit codes:
+    - 0: SAT
+    - 1: UNSAT
+    - 2: UNKNOWN
+    - 3: Error
+
+    Usage:
+    - See print_help() for CLI instructions.
+    - Run: ./benchmarks --help
+*/
+
 #include <z3++.h>
 #include "multi_theory_fixedpoint.h"
+
+#include <string>
+#include <unordered_map>
+#include <functional>
+#include <vector>
+#include <stdexcept>
+#include <cstring>
 
 using namespace z3;
 using namespace multi_theory_horn;
 
+// -------- Helpers --------
 expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
     if (is_signed) {
         int N = (uint64_t)1 << (k - 1);
@@ -14,6 +37,17 @@ expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
     return (c.int_val(0) <= e) && (e < c.int_val(N));
 }
 
+params get_bv_params(context& c) {
+    params param(c);
+    param.set("engine", "spacer");
+    //set_param("verbose", 10);
+    param.set("fp.xform.slice", false);
+    param.set("fp.xform.inline_linear", false);
+    param.set("fp.xform.inline_eager", false);
+    return param;
+}
+
+// -------- Benchmarks --------
 check_result max_bv(unsigned int size) {
     context c;
     fixedpoint fp(c);
@@ -29,13 +63,7 @@ check_result max_bv(unsigned int size) {
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
 
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    //set_param("verbose", 10);
-    param.set("fp.xform.slice", false);
-    param.set("fp.xform.inline_linear", false);
-    param.set("fp.xform.inline_eager", false);
+    params param = get_bv_params(c);
     fp.set(param);
 
     // Variables
@@ -65,19 +93,6 @@ check_result max_bv(unsigned int size) {
     // p(y,z,a,i), !(i < z), !(a == max(a,y)) --> false
     expr query = exists(vars, p(y, z, a, i) && !ult(i, z) && !(a == (a ^ ((a ^ y) & ite(ult(a, y), c.bv_val(-1, size), c.bv_val(0, size))))));
     check_result result = fp.query(query);
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
 
     return result;
 }
@@ -147,16 +162,6 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
     expr query_bv_phi =  !(a_bv == (a_bv ^ ((a_bv ^ y_bv) & ite(ult(a_bv, y_bv), c.bv_val(-1, size), c.bv_val(0, size)))));
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);      
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
     return result;
 }
 
@@ -174,13 +179,7 @@ check_result opposite_signs_bv(unsigned int size) {
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
 
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    param.set("fp.xform.slice", false);
-    param.set("fp.xform.inline_linear", false);
-    param.set("fp.xform.inline_eager", false);
-    //set_param("verbose", 10);
+    params param = get_bv_params(c);
     fp.set(param);
 
     // Variables
@@ -207,19 +206,6 @@ check_result opposite_signs_bv(unsigned int size) {
     // p(x,a,b), !(a < x), !(a,b have opposite signs) --> false
     expr query = exists(vars, p(x, a, b) && !(a < x) && !((a ^ b) < 0));        
     check_result result = fp.query(query);
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
 
     return result;
 }
@@ -282,17 +268,7 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
     query_vars.push_back(b_bv);
     expr query_bv_pred = q_bv(a_bv, b_bv);
     expr query_bv_phi = !((a_bv ^ b_bv) < 0);
-    check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);      
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
+    check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
     return result;
 }
@@ -311,13 +287,7 @@ check_result abs_bv(unsigned int size) {
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
 
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    param.set("fp.xform.slice", false);
-    param.set("fp.xform.inline_linear", false);
-    param.set("fp.xform.inline_eager", false);
-    //set_param("verbose", 10);
+    params param = get_bv_params(c);
     fp.set(param);
 
     // Variables
@@ -340,19 +310,6 @@ check_result abs_bv(unsigned int size) {
     // p(x,y,i), !(i < y), !(x <= i) --> false
     expr query = exists(x, y, i, p(x, y, i) && !(i < y) && !(x <= i));        
     check_result result = fp.query(query);
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
 
     return result;
 }
@@ -419,16 +376,6 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     expr query_int_phi = !(i_int < y_int) && !(x_int <= i_int);
     check_result result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);      
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
     return result;
 }
 
@@ -446,13 +393,7 @@ check_result cond_negate_bv(unsigned int size) {
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
 
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    param.set("fp.xform.slice", false);
-    param.set("fp.xform.inline_linear", false);
-    param.set("fp.xform.inline_eager", false);
-    //set_param("verbose", 10);
+    params param = get_bv_params(c);
     fp.set(param);
 
     // Variables
@@ -475,19 +416,6 @@ check_result cond_negate_bv(unsigned int size) {
     // p(x,y,i), !(i < y), b == ite(i <= x,1,0), !((x ^ (-b)) + b == -x) --> false
     expr query = exists(x, y, i, b, p(x, y, i) && !(i < y) && (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && !(((x ^ (-b)) + b) == -x));
     check_result result = fp.query(query);
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
 
     return result;
 }
@@ -555,16 +483,6 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
     expr query_bv_phi = (b_bv == ite(i_bv <= x_bv, c.bv_val(1, size), c.bv_val(0, size))) && !(((x_bv ^ (-b_bv)) + b_bv) == -x_bv);
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
     return result;
 }
 
@@ -593,7 +511,6 @@ check_result swap_bv(unsigned int size) {
     // Set engine to Spacer explicitly (optional — it's the default)
     params param(c);
     param.set("engine", "spacer");
-    //set_param("verbose", 10);
     fp.set(param);
 
     // Variables
@@ -677,23 +594,10 @@ check_result swap_bv(unsigned int size) {
     expr query = exists(x, z, a, b, p4(x, z, a, b) && !ult(a, z - x) && !(ult(a, b)));
     check_result result = fp.query(query);
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
-
     return result;
 }
 
-check_result swap_multi(unsigned int size) {      // bv - - -> int, unsigned variables, multiple loops
+check_result swap_multi(unsigned int size) { // bv - - -> int, unsigned variables, multiple loops
     context c;
 
     // Declare sorts
@@ -827,16 +731,6 @@ check_result swap_multi(unsigned int size) {      // bv - - -> int, unsigned var
     check_result result;
     result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
     return result;
 }
 
@@ -864,13 +758,7 @@ check_result swap2_bv(unsigned int size) {
     fp.register_relation(r2);
     fp.register_relation(r3);
 
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    param.set("fp.xform.slice", false);
-    param.set("fp.xform.inline_linear", false);
-    param.set("fp.xform.inline_eager", false);
-    //set_param("verbose", 10);
+    params param = get_bv_params(c);
     fp.set(param);
 
     // Variables
@@ -923,19 +811,6 @@ check_result swap2_bv(unsigned int size) {
     // r3(a,b) && !(ult(a,b)) --> false
     expr query = exists(a, b, r3(a, b) && !ult(a, b));
     check_result result = fp.query(query);
-
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
-    std::cout << "\nSpacer's output:\n";
-    std::cout << fp.get_answer() << "\n";
 
     return result;
 }
@@ -1029,38 +904,112 @@ check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variab
     expr query_bv_phi = (c_bv == (a_bv ^ b_bv)) && (d_bv == (c_bv ^ b_bv)) && (e_bv == (c_bv ^ d_bv)) && !(ult(e_bv, d_bv));
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
-    if (result == sat) {
-        std::cout << "SAT: Bad state is reachable.\n";
-    }
-    else if (result == unsat) {
-        std::cout << "UNSAT: Bad state is unreachable.\n";
-    }
-    else {
-        std::cout << "UNKNOWN.\n";
-    }
-
     return result;
 }
 
-int main() {
+// ======================= MAIN LOGIC =======================
+
+enum ExitCode {
+    EXIT_SAT     = 0,
+    EXIT_UNSAT   = 1,
+    EXIT_UNKNOWN = 2,
+    EXIT_ERROR   = 3
+};
+
+static void print_help() {
+    std::cout <<
+        "Usage:\n"
+        "  benchmarks --bench <name> --size <k>\n"
+        "Options:\n"
+        "  --bench <name>   Benchmark to run (see --list)\n"
+        "  --size  <k>      Bit-vector size (unsigned integer > 0)\n"
+        "  --list           Print available benchmarks\n"
+        "  --help           Show this help\n"
+        "  --quiet          Don't print anything\n"
+        "\n"
+        "Exit codes: 0=SAT, 1=UNSAT, 2=UNKNOWN, 3=error\n";
+}
+
+static int run_benchmarks_cli(int argc, char** argv) {
+    using BenchFn = std::function<check_result(unsigned int)>;
+    const std::unordered_map<std::string, BenchFn> REGISTRY = {
+        {"max_bv",               max_bv},
+        {"max_multi",            max_multi},
+        {"opposite_signs_bv",    opposite_signs_bv},
+        {"opposite_signs_multi", opposite_signs_multi},
+        {"abs_bv",               abs_bv},
+        {"abs_multi",            abs_multi},
+        {"cond_negate_bv",       cond_negate_bv},
+        {"cond_negate_multi",    cond_negate_multi},
+        {"swap_bv",              swap_bv},
+        {"swap_multi",           swap_multi},
+        {"swap2_bv",             swap2_bv},
+        {"swap2_multi",          swap2_multi},
+    };
+
+    std::string bench;
+    unsigned int size = 0;
+    bool quiet = false;
+
+    // Parse args
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--help") == 0) {
+            print_help();
+            return EXIT_SAT; // help is "success"
+        } else if (std::strcmp(argv[i], "--list") == 0) {
+            for (const auto& kv : REGISTRY) std::cout << kv.first << "\n";
+            return EXIT_SAT; // list is "success"
+        } else if (std::strcmp(argv[i], "--bench") == 0 && i + 1 < argc) {
+            bench = argv[++i];
+        } else if (std::strcmp(argv[i], "--size") == 0 && i + 1 < argc) {
+            try {
+                size = static_cast<unsigned int>(std::stoul(argv[++i]));
+            } catch (...) {
+                std::cout << "error: --size expects a positive integer\n";
+                return EXIT_ERROR;
+            }
+            if (size == 0) {
+                std::cout << "error: --size must be > 0\n";
+                return EXIT_ERROR;
+            }
+        } else if (std::strcmp(argv[i], "--quiet") == 0) {
+            quiet = true;
+        } else {
+            std::cout << "error: unknown or malformed argument: " << argv[i] << "\n";
+            return EXIT_ERROR;
+        }
+    }
+
+    if (bench.empty() || size == 0) {
+        std::cout << "error: missing required args. Use --bench <name> and --size <k>\n";
+        return EXIT_ERROR;
+    }
+
+    auto it = REGISTRY.find(bench);
+    if (it == REGISTRY.end()) {
+        std::cout << "error: unknown benchmark '" << bench << "'. Use --list to see options.\n";
+        return EXIT_ERROR;
+    }
+
     try {
-        unsigned int size = 4;
-        //max_bv(size);
-        //max_multi(size);
-        //opposite_signs_bv(size);
-        //opposite_signs_multi(size);
-        //abs_bv(size);
-        //abs_multi(size);
-        //cond_negate_bv(size);
-        cond_negate_multi(size);
-        //swap_bv(size);
-        //swap_multi(size);
-        //swap2_bv(size);
-        //swap2_multi(size);
+        check_result r = it->second(size);
+        switch (r) {
+            case sat:     if (!quiet) std::cout << EXIT_SAT     + "-SAT\n";     return EXIT_SAT;
+            case unsat:   if (!quiet) std::cout << EXIT_UNSAT   + "-UNSAT\n";   return EXIT_UNSAT;
+            case unknown: if (!quiet) std::cout << EXIT_UNKNOWN + "-UNKNOWN\n"; return EXIT_UNKNOWN;
+        }
+        if (!quiet) std::cout << "error: unexpected solver result\n";
+        return EXIT_ERROR;
+    } catch (const std::exception& e) {
+        if (!quiet) std::cout << "error: exception thrown: " << e.what() << "\n";
+        return EXIT_ERROR;
+    } catch (...) {
+        if (!quiet) std::cout << "error: unknown exception thrown during execution\n";
+        return EXIT_ERROR;
     }
-    catch (exception& ex) {
-        std::cout << "unexpected error: " << ex << "\n";
-    }
-    Z3_finalize_memory();
-    return 0;
+}
+
+// Slim main
+int main(int argc, char** argv) {
+    return run_benchmarks_cli(argc, argv);
 }
