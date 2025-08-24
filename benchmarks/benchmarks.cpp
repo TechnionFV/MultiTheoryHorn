@@ -1052,11 +1052,11 @@ int main() {
         //abs_bv(size);
         //abs_multi(size);
         //cond_negate_bv(size);
-        //cond_negate_multi(size);
+        cond_negate_multi(size);
         //swap_bv(size);
         //swap_multi(size);
         //swap2_bv(size);
-        swap2_multi(size);
+        //swap2_multi(size);
     }
     catch (exception& ex) {
         std::cout << "unexpected error: " << ex << "\n";
