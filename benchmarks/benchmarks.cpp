@@ -974,6 +974,9 @@ static int run_benchmarks_cli(int argc, char** argv) {
             }
         } else if (std::strcmp(argv[i], "--quiet") == 0) {
             quiet = true;
+        } else if (std::strcmp(argv[i], "--debug") == 0) {
+            // This option doesn't appear in help, it's just for dev convenience
+            multi_theory_horn::set_mtfp_debug(true);
         } else {
             std::cout << "error: unknown or malformed argument: " << argv[i] << "\n";
             return EXIT_ERROR;
@@ -992,11 +995,13 @@ static int run_benchmarks_cli(int argc, char** argv) {
     }
 
     try {
+        // Call the benchmark
         check_result r = it->second(size);
+
         switch (r) {
-            case sat:     if (!quiet) std::cout << EXIT_SAT     + "-SAT\n";     return EXIT_SAT;
-            case unsat:   if (!quiet) std::cout << EXIT_UNSAT   + "-UNSAT\n";   return EXIT_UNSAT;
-            case unknown: if (!quiet) std::cout << EXIT_UNKNOWN + "-UNKNOWN\n"; return EXIT_UNKNOWN;
+            case sat:     if (!quiet) std::cout << "SAT - (Exit code: " << EXIT_SAT << ")\n";     return EXIT_SAT;
+            case unsat:   if (!quiet) std::cout << "UNSAT - (Exit code: " << EXIT_UNSAT << ")\n";   return EXIT_UNSAT;
+            case unknown: if (!quiet) std::cout << "UNKNOWN - (Exit code: " << EXIT_UNKNOWN << ")\n"; return EXIT_UNKNOWN;
         }
         if (!quiet) std::cout << "error: unexpected solver result\n";
         return EXIT_ERROR;
