@@ -129,19 +129,16 @@ namespace multi_theory_horn {
             exit(1); \
         } while (0)
 
-    // Debug message macro
-    // #define DEBMSG
-    #ifdef DEBMSG
+    // DEBUG related stuff
+    inline bool mtfp_debug = false;
+    inline void set_mtfp_debug(bool is_debug) {
+        mtfp_debug = is_debug;
+    }
     #define DEBUG_MSG(cmd) \
-        do                 \
-        {                  \
-            std::cout << "-------------------------------------------------------" << std::endl;     \
-            cmd;           \
+        do { \
+            if (mtfp_debug) { \
+                std::cout << "-------------------------------------------------------" << std::endl; \
+                cmd; \
+            } \
         } while (0)
-    #else
-    #define DEBUG_MSG(cmd) \
-        do                 \
-        {                  \
-        } while (0)
-    #endif
 }
