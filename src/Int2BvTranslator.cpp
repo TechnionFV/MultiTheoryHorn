@@ -154,7 +154,7 @@ namespace multi_theory_horn {
                 break;
             default:
                 // fallback: treat as uninterpreted
-                // std::cout << f << std::endl;
+                // OUT() << f << std::endl;
                 ASSERT_FALSE("Unsupported Int operation");
         }
 

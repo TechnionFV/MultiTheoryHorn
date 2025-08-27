@@ -260,7 +260,7 @@ namespace multi_theory_horn {
             case Z3_OP_BUMUL_NO_OVFL:
             case Z3_OP_BSMUL_NO_UDFL:
             default:
-                // std::cout << f << std::endl;
+                // OUT() << f << std::endl;
                 ASSERT_FALSE("Unsupported BV operation");
         }
 
