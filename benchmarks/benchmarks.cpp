@@ -914,7 +914,8 @@ enum ExitCode {
     EXIT_SAT     = 0,
     EXIT_UNSAT   = 1,
     EXIT_UNKNOWN = 2,
-    EXIT_ERROR   = 3
+    EXIT_ERROR   = 3,
+    EXIT_NOTHING = 4
 };
 
 std::pair<std::string, ExitCode> result_to_string_and_code(check_result cr) {
@@ -934,7 +935,7 @@ static void print_help() {
         "Options:\n"
         "  --bench <name>   Benchmark to run (see --list)\n"
         "  --size  <k>      Bit-vector size (unsigned integer > 0)\n"
-        "  --list           Print available benchmarks\n"
+        "  --list           Print enabled benchmarks\n"
         "  --help           Show this help\n"
         "  --quiet          Don't print anything\n"
         "  --brunch         Print results in BRUNCH_STAT format (bench, size, result)\n"
@@ -945,19 +946,25 @@ static void print_help() {
 
 static int run_benchmarks_cli(int argc, char** argv) {
     using BenchFn = std::function<check_result(unsigned int)>;
-    const std::unordered_map<std::string, BenchFn> REGISTRY = {
-        {"max_bv",               max_bv},
-        {"max_multi",            max_multi},
-        {"opposite_signs_bv",    opposite_signs_bv},
-        {"opposite_signs_multi", opposite_signs_multi},
-        {"abs_bv",               abs_bv},
-        {"abs_multi",            abs_multi},
-        {"cond_negate_bv",       cond_negate_bv},
-        {"cond_negate_multi",    cond_negate_multi},
-        {"swap_bv",              swap_bv},
-        {"swap_multi",           swap_multi},
-        {"swap2_bv",             swap2_bv},
-        {"swap2_multi",          swap2_multi},
+    struct Benchmark {
+        BenchFn fn;
+        bool enabled;
+    };
+
+    // TODO [Omer]: Decide which benchmarks to disable
+    const std::unordered_map<std::string, Benchmark> REGISTRY = {
+        {"max_bv",               {max_bv, true}},
+        {"max_multi",            {max_multi, true}},
+        {"opposite_signs_bv",    {opposite_signs_bv, true}},
+        {"opposite_signs_multi", {opposite_signs_multi, true}},
+        {"abs_bv",               {abs_bv, true}},
+        {"abs_multi",            {abs_multi, true}},
+        {"cond_negate_bv",       {cond_negate_bv, true}},
+        {"cond_negate_multi",    {cond_negate_multi, true}},
+        {"swap_bv",              {swap_bv, true}},
+        {"swap_multi",           {swap_multi, true}},
+        {"swap2_bv",             {swap2_bv, true}},
+        {"swap2_multi",          {swap2_multi, true}}
     };
 
     std::string bench = "";
@@ -969,10 +976,13 @@ static int run_benchmarks_cli(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--help") == 0) {
             print_help();
-            return EXIT_SAT; // help is "success"
+            return EXIT_NOTHING;
         } else if (std::strcmp(argv[i], "--list") == 0) {
-            for (const auto& kv : REGISTRY) OUT() << kv.first << "\n";
-            return EXIT_SAT; // list is "success"
+            for (const auto& kv : REGISTRY) {
+                if (kv.second.enabled)
+                    OUT() << kv.first << "\n";
+            }
+            return EXIT_NOTHING;
         } else if (std::strcmp(argv[i], "--bench") == 0 && i + 1 < argc) {
             bench = argv[++i];
         } else if (std::strcmp(argv[i], "--size") == 0 && i + 1 < argc) {
@@ -1032,7 +1042,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
     int exit_code = EXIT_ERROR;
     try {
         // Call the benchmark
-        check_result r = it->second(size);
+        check_result r = it->second.fn(size);
         auto [result_str, code] = result_to_string_and_code(r);
         exit_code = code;
 
