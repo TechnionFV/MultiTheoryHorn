@@ -916,6 +916,16 @@ enum ExitCode {
     EXIT_ERROR   = 3
 };
 
+std::pair<std::string, ExitCode> result_to_string_and_code(check_result cr) {
+    switch (cr) {
+        case sat:     return {"SAT", EXIT_SAT};
+        case unsat:   return {"UNSAT", EXIT_UNSAT};
+        case unknown: return {"UNKNOWN", EXIT_UNKNOWN};
+    }
+    UNREACHABLE();
+    return {"ERROR", EXIT_ERROR};
+}
+
 static void print_help() {
     std::cout <<
         "Usage:\n"
@@ -926,6 +936,7 @@ static void print_help() {
         "  --list           Print available benchmarks\n"
         "  --help           Show this help\n"
         "  --quiet          Don't print anything\n"
+        "  --brunch         Print results in BRUNCH_STAT format (bench, size, result)\n"
         "\n"
         "Exit codes: 0=SAT, 1=UNSAT, 2=UNKNOWN, 3=error\n";
 }
@@ -947,9 +958,9 @@ static int run_benchmarks_cli(int argc, char** argv) {
         {"swap2_multi",          swap2_multi},
     };
 
-    std::string bench;
+    std::string bench = "";
     unsigned int size = 0;
-    bool quiet = false;
+    bool quiet = false, brunch = false;
 
     // Parse args
     for (int i = 1; i < argc; ++i) {
@@ -974,8 +985,10 @@ static int run_benchmarks_cli(int argc, char** argv) {
             }
         } else if (std::strcmp(argv[i], "--quiet") == 0) {
             quiet = true;
+        } else if (std::strcmp(argv[i], "--brunch") == 0) {
+            brunch = true;
         } else if (std::strcmp(argv[i], "--debug") == 0) {
-            // This option doesn't appear in help, it's just for dev convenience
+            // hidden dev option
             multi_theory_horn::set_mtfp_debug(true);
         } else {
             std::cout << "error: unknown or malformed argument: " << argv[i] << "\n";
@@ -988,30 +1001,40 @@ static int run_benchmarks_cli(int argc, char** argv) {
         return EXIT_ERROR;
     }
 
+    if (brunch && quiet) {
+        std::cout << "error: --brunch and --quiet are incompatible\n";
+        return EXIT_ERROR;
+    }
+
     auto it = REGISTRY.find(bench);
     if (it == REGISTRY.end()) {
         std::cout << "error: unknown benchmark '" << bench << "'. Use --list to see options.\n";
         return EXIT_ERROR;
     }
 
+    int exit_code = EXIT_ERROR;
     try {
         // Call the benchmark
         check_result r = it->second(size);
+        auto [result_str, code] = result_to_string_and_code(r);
+        exit_code = code;
 
-        switch (r) {
-            case sat:     if (!quiet) std::cout << "SAT - (Exit code: " << EXIT_SAT << ")\n";     return EXIT_SAT;
-            case unsat:   if (!quiet) std::cout << "UNSAT - (Exit code: " << EXIT_UNSAT << ")\n";   return EXIT_UNSAT;
-            case unknown: if (!quiet) std::cout << "UNKNOWN - (Exit code: " << EXIT_UNKNOWN << ")\n"; return EXIT_UNKNOWN;
+        if (brunch) {
+            std::cout << "BRUNCH_STAT bench "  << bench       << "\n";
+            std::cout << "BRUNCH_STAT size "   << size        << "\n";
+            std::cout << "BRUNCH_STAT result " << result_str  << "\n";
+        } else if (!quiet) {
+            std::cout << result_str << " - (Exit code: " << code << ")\n";
         }
-        if (!quiet) std::cout << "error: unexpected solver result\n";
-        return EXIT_ERROR;
     } catch (const std::exception& e) {
-        if (!quiet) std::cout << "error: exception thrown: " << e.what() << "\n";
-        return EXIT_ERROR;
+        std::cout << "error: exception thrown: " << e.what() << "\n";
+        exit_code = EXIT_ERROR;
     } catch (...) {
-        if (!quiet) std::cout << "error: unknown exception thrown during execution\n";
-        return EXIT_ERROR;
+        std::cout << "error: unknown exception thrown during execution\n";
+        exit_code = EXIT_ERROR;
     }
+
+    return exit_code;
 }
 
 // Slim main
