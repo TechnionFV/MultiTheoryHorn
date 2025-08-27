@@ -18,6 +18,7 @@
 #include "multi_theory_fixedpoint.h"
 
 #include <string>
+#include <fstream>
 #include <unordered_map>
 #include <functional>
 #include <vector>
@@ -927,7 +928,7 @@ std::pair<std::string, ExitCode> result_to_string_and_code(check_result cr) {
 }
 
 static void print_help() {
-    std::cout <<
+    OUT() <<
         "Usage:\n"
         "  benchmarks --bench <name> --size <k>\n"
         "Options:\n"
@@ -937,6 +938,7 @@ static void print_help() {
         "  --help           Show this help\n"
         "  --quiet          Don't print anything\n"
         "  --brunch         Print results in BRUNCH_STAT format (bench, size, result)\n"
+        "  --output <file>  Redirect output to given file\n"
         "\n"
         "Exit codes: 0=SAT, 1=UNSAT, 2=UNKNOWN, 3=error\n";
 }
@@ -961,6 +963,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
     std::string bench = "";
     unsigned int size = 0;
     bool quiet = false, brunch = false;
+    std::string output_path;
 
     // Parse args
     for (int i = 1; i < argc; ++i) {
@@ -968,7 +971,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
             print_help();
             return EXIT_SAT; // help is "success"
         } else if (std::strcmp(argv[i], "--list") == 0) {
-            for (const auto& kv : REGISTRY) std::cout << kv.first << "\n";
+            for (const auto& kv : REGISTRY) OUT() << kv.first << "\n";
             return EXIT_SAT; // list is "success"
         } else if (std::strcmp(argv[i], "--bench") == 0 && i + 1 < argc) {
             bench = argv[++i];
@@ -976,39 +979,53 @@ static int run_benchmarks_cli(int argc, char** argv) {
             try {
                 size = static_cast<unsigned int>(std::stoul(argv[++i]));
             } catch (...) {
-                std::cout << "error: --size expects a positive integer\n";
+                OUT() << "error: --size expects a positive integer\n";
                 return EXIT_ERROR;
             }
             if (size == 0) {
-                std::cout << "error: --size must be > 0\n";
+                OUT() << "error: --size must be > 0\n";
                 return EXIT_ERROR;
             }
         } else if (std::strcmp(argv[i], "--quiet") == 0) {
             quiet = true;
         } else if (std::strcmp(argv[i], "--brunch") == 0) {
             brunch = true;
+        } else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
+            output_path = argv[++i];
         } else if (std::strcmp(argv[i], "--debug") == 0) {
             // hidden dev option
-            multi_theory_horn::set_mtfp_debug(true);
+            set_mtfp_debug(true);
         } else {
-            std::cout << "error: unknown or malformed argument: " << argv[i] << "\n";
+            OUT() << "error: unknown or malformed argument: " << argv[i] << "\n";
             return EXIT_ERROR;
         }
     }
 
     if (bench.empty() || size == 0) {
-        std::cout << "error: missing required args. Use --bench <name> and --size <k>\n";
+        OUT() << "error: missing required args. Use --bench <name> and --size <k>\n";
         return EXIT_ERROR;
     }
 
     if (brunch && quiet) {
-        std::cout << "error: --brunch and --quiet are incompatible\n";
+        OUT() << "error: --brunch and --quiet are incompatible\n";
         return EXIT_ERROR;
+    }
+
+    // Set up output redirection if requested
+    std::ofstream ofs;
+    if (!output_path.empty()) {
+        ofs.open(output_path);
+        if (!ofs) {
+            OUT() << "error: failed to open output file '" << output_path << "'\n";
+            return EXIT_ERROR;
+        }
+        // Point the project-wide OUT() at the file
+        set_output_stream(ofs);
     }
 
     auto it = REGISTRY.find(bench);
     if (it == REGISTRY.end()) {
-        std::cout << "error: unknown benchmark '" << bench << "'. Use --list to see options.\n";
+        OUT() << "error: unknown benchmark '" << bench << "'. Use --list to see options.\n";
         return EXIT_ERROR;
     }
 
@@ -1020,17 +1037,17 @@ static int run_benchmarks_cli(int argc, char** argv) {
         exit_code = code;
 
         if (brunch) {
-            std::cout << "BRUNCH_STAT bench "  << bench       << "\n";
-            std::cout << "BRUNCH_STAT size "   << size        << "\n";
-            std::cout << "BRUNCH_STAT result " << result_str  << "\n";
+            OUT() << "BRUNCH_STAT bench "  << bench      << "\n";
+            OUT() << "BRUNCH_STAT size "   << size       << "\n";
+            OUT() << "BRUNCH_STAT result " << result_str << "\n";
         } else if (!quiet) {
-            std::cout << result_str << " - (Exit code: " << code << ")\n";
+            OUT() << result_str << " - (Exit code: " << code << ")\n";
         }
     } catch (const std::exception& e) {
-        std::cout << "error: exception thrown: " << e.what() << "\n";
+        OUT() << "error: exception thrown: " << e.what() << "\n";
         exit_code = EXIT_ERROR;
     } catch (...) {
-        std::cout << "error: unknown exception thrown during execution\n";
+        OUT() << "error: unknown exception thrown during execution\n";
         exit_code = EXIT_ERROR;
     }
 

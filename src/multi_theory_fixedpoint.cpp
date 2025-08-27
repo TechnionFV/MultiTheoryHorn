@@ -102,7 +102,7 @@ namespace multi_theory_horn {
             assert(arg_is_const(bv_vars[i]) && "bv_vars must contain a BV variable");
             assert(arg_is_const(int_vars[i]) && "int_vars must contain an int variable");
 
-            DEBUG_MSG(std::cout << "Adding variable map: " 
+            DEBUG_MSG(OUT() << "Adding variable map: " 
                 << bv_vars[i] << " <-> " << int_vars[i] << std::endl);
 
             // Insert the int variable into the bv2int_var_map
@@ -180,7 +180,7 @@ namespace multi_theory_horn {
             ASSERT_FALSE("theory_1 and theory_2 must be different theories");
         
         // Add a fact for the interface predicate in the second theory
-        DEBUG_MSG(std::cout << "Adding interface constraint: " 
+        DEBUG_MSG(OUT() << "Adding interface constraint: " 
             << p1_expr << " ------> " << p2_expr << std::endl);
         
         // Initialize the strengthening expression of the source predicate to true
@@ -211,13 +211,13 @@ namespace multi_theory_horn {
             z3::check_result res;
             if (config.i == Theory::IAUF) {
                 p_query = z3::exists(config.vars, config.p && config.phi);
-                DEBUG_MSG(std::cout << "Integer engine:\n" << engine_int() << std::endl);
-                DEBUG_MSG(std::cout << "Querying integer engine with:\n" << p_query << std::endl);
+                DEBUG_MSG(OUT() << "Integer engine:\n" << engine_int() << std::endl);
+                DEBUG_MSG(OUT() << "Querying integer engine with:\n" << p_query << std::endl);
                 res = engine_int().query(p_query);
             } else if (config.i == Theory::BV) {
                 p_query = z3::exists(config.vars, config.p && config.phi);
-                DEBUG_MSG(std::cout << "Bit-vector engine:\n" << engine_bv() << std::endl);
-                DEBUG_MSG(std::cout << "Querying bit-vector engine with:\n" << p_query << std::endl);
+                DEBUG_MSG(OUT() << "Bit-vector engine:\n" << engine_bv() << std::endl);
+                DEBUG_MSG(OUT() << "Querying bit-vector engine with:\n" << p_query << std::endl);
                 res = engine_bv().query(p_query);
             } else {
                 ASSERT_FALSE("Unsupported theory in MT_fixedpoint::query");
@@ -234,12 +234,12 @@ namespace multi_theory_horn {
                         z3::func_decl p_decl = config.p.decl();
                         z3::expr p_interp = engine_int().get_cover_delta(-1, p_decl);
                         p_interp = p_interp.substitute(config.p.args());
-                        DEBUG_MSG(std::cout << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
+                        DEBUG_MSG(OUT() << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
 
                         // Initialize the translator
                         Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
                         z3::expr bv_p_interp = int2bv_t.translate(p_interp);
-                        DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
+                        DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
                         auto st_it = p_to_strengthening_expr_map.find(p_decl);
@@ -253,13 +253,13 @@ namespace multi_theory_horn {
                         assert(it != p_to_fact_map.end() && "Fact not found in the map");
                         CHCFactConfig* fact_config = &it->second; // get the config
                         z3::symbol fact_name = fact_config->second; // get CHC fact name
-                        DEBUG_MSG(std::cout << "Fact name: " << fact_name << std::endl);
-                        DEBUG_MSG(std::cout << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
+                        DEBUG_MSG(OUT() << "Fact name: " << fact_name << std::endl);
+                        DEBUG_MSG(OUT() << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
                         
                         // Strengthn the fact
                         fact_config->first.body_formula = fact_config->first.body_formula && bv_p_interp;
                         z3::expr new_fact = fact_config->first.get_rule_expr();
-                        DEBUG_MSG(std::cout << "New fact: " << new_fact << std::endl);
+                        DEBUG_MSG(OUT() << "New fact: " << new_fact << std::endl);
 
                         m_fp_bv.update_rule(new_fact, fact_name);
                     }
@@ -268,7 +268,7 @@ namespace multi_theory_horn {
                         z3::func_decl p_decl = config.p.decl();
                         z3::expr p_interp = engine_bv().get_cover_delta(-1, p_decl);
                         p_interp = p_interp.substitute(config.p.args());
-                        DEBUG_MSG(std::cout << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
+                        DEBUG_MSG(OUT() << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
                         
                         // Initialize the translator
                         Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
@@ -279,7 +279,7 @@ namespace multi_theory_horn {
                             lemmas.push_back(lemma);
                         }
                         int_p_interp = int_p_interp && z3::mk_and(lemmas);
-                        DEBUG_MSG(std::cout << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
+                        DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
                         auto st_it = p_to_strengthening_expr_map.find(p_decl);
@@ -293,13 +293,13 @@ namespace multi_theory_horn {
                         assert(it != p_to_fact_map.end() && "Fact not found in the map");
                         CHCFactConfig* fact_config = &it->second; // get the config
                         z3::symbol fact_name = fact_config->second; // get CHC fact name
-                        DEBUG_MSG(std::cout << "Fact name: " << fact_name << std::endl);
-                        DEBUG_MSG(std::cout << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
+                        DEBUG_MSG(OUT() << "Fact name: " << fact_name << std::endl);
+                        DEBUG_MSG(OUT() << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
 
                         // Strengthn the fact
                         fact_config->first.body_formula = fact_config->first.body_formula && int_p_interp;
                         z3::expr new_fact = fact_config->first.get_rule_expr();
-                        DEBUG_MSG(std::cout << "New fact: " << new_fact << std::endl);
+                        DEBUG_MSG(OUT() << "New fact: " << new_fact << std::endl);
 
                         m_fp_int.update_rule(new_fact, fact_name);
                     }
@@ -313,13 +313,13 @@ namespace multi_theory_horn {
                 if (config.i == Theory::IAUF) {
                     // line 13
                     z3::expr g_refutation = engine_int().get_answer();
-                    DEBUG_MSG(std::cout << "Refutation:\n" << g_refutation << std::endl);
+                    DEBUG_MSG(OUT() << "Refutation:\n" << g_refutation << std::endl);
 
                     Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
                     
                     // Extract the refutation leaf predicate
                     z3::expr q = get_refutation_leaf_pred(g_refutation);
-                    DEBUG_MSG(std::cout << "Refutation leaf predicate: " << q << std::endl);
+                    DEBUG_MSG(OUT() << "Refutation leaf predicate: " << q << std::endl);
 
                     // If we're dealing with a non user-visible predicate, use the query
                     // predicate from the config, otherwise use the query predicate from the refutation
@@ -329,14 +329,14 @@ namespace multi_theory_horn {
                         // line 15
                         z3::expr_vector original_vars = m_bv2int_map.get_dst_vars(search_decl);
                         z3::expr phi = get_refutation_leaf_phi(q, original_vars);
-                        DEBUG_MSG(std::cout << "phi: " << phi << std::endl);
+                        DEBUG_MSG(OUT() << "phi: " << phi << std::endl);
 
                         z3::expr phi_trans = int2bv_t.translate(phi);
-                        DEBUG_MSG(std::cout << "Translated phi: " << phi_trans << std::endl);
+                        DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);
                         z3::expr_vector translated_vars = int2bv_t.vars();
                         
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
-                        DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
+                        DEBUG_MSG(OUT() << "q' (with translated vars) = " << q_tag_new << std::endl);
 
                         auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
                         assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
@@ -352,13 +352,13 @@ namespace multi_theory_horn {
                 else if (config.i == Theory::BV) {
                     // line 13
                     z3::expr g_refutation = engine_bv().get_answer();
-                    DEBUG_MSG(std::cout << "Refutation:\n" << g_refutation << std::endl);
+                    DEBUG_MSG(OUT() << "Refutation:\n" << g_refutation << std::endl);
 
                     Bv2IntTranslator bv2int_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
 
                     // Extract the refutation leaf predicate
                     z3::expr q = get_refutation_leaf_pred(g_refutation);
-                    DEBUG_MSG(std::cout << "Refutation leaf predicate: " << q << std::endl);
+                    DEBUG_MSG(OUT() << "Refutation leaf predicate: " << q << std::endl);
                     
                     // If we're dealing with a non user-visible predicate, use the query
                     // predicate from the config, otherwise use the query predicate from the refutation
@@ -368,7 +368,7 @@ namespace multi_theory_horn {
                         // line 15
                         z3::expr_vector original_vars = m_int2bv_map.get_dst_vars(search_decl);
                         z3::expr phi = get_refutation_leaf_phi(q, original_vars);
-                        DEBUG_MSG(std::cout << "phi: " << phi << std::endl);
+                        DEBUG_MSG(OUT() << "phi: " << phi << std::endl);
 
                         z3::expr phi_trans = bv2int_t.translate(phi);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
@@ -377,11 +377,11 @@ namespace multi_theory_horn {
                             lemmas.push_back(lemma);
                         }
                         phi_trans = (phi_trans) && z3::mk_and(lemmas);
-                        DEBUG_MSG(std::cout << "Translated phi: " << phi_trans << std::endl);
+                        DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);
                         z3::expr_vector translated_vars = bv2int_t.vars();
                         
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
-                        DEBUG_MSG(std::cout << "q' (with translated vars) = " << q_tag_new << std::endl);
+                        DEBUG_MSG(OUT() << "q' (with translated vars) = " << q_tag_new << std::endl);
                         
                         auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
                         assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");

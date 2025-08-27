@@ -105,18 +105,26 @@ namespace multi_theory_horn {
         return u;
     }
 
-    #define NDEBUG 0
+    // Centralized output sinks (default to std::cout/std::cerr)
+    inline std::ostream* g_out = &std::cout;
+    inline std::ostream* g_err = &std::cerr;
+
+    inline void set_output_stream(std::ostream& os) { g_out = &os; }
+    inline void set_error_stream(std::ostream& os) { g_err = &os; }
+
+    inline std::ostream& OUT() { return *g_out; }
+    inline std::ostream& ERR() { return *g_err; }
 
     #define NOT_IMPLEMENTED() \
         do { \
-            std::cerr << "Not implemented: " << __FILE__ << ":" << __LINE__ << std::endl; \
+            OUT() << "Not implemented: " << __FILE__ << ":" << __LINE__ << std::endl; \
             assert(false && "Not implemented"); \
             exit(1); \
         } while (0)
 
     #define UNREACHABLE() \
         do { \
-            std::cerr << "Unreachable code reached: " << __FILE__ << ":" << __LINE__ << std::endl; \
+            OUT() << "Unreachable code reached: " << __FILE__ << ":" << __LINE__ << std::endl; \
             assert(false && "Unreachable code reached"); \
             exit(1); \
         } while (0)
@@ -124,7 +132,7 @@ namespace multi_theory_horn {
     // Add assert(false) with message macro
     #define ASSERT_FALSE(msg) \
         do { \
-            std::cerr << "Assertion failed: " << msg << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
+            OUT() << "Assertion failed: " << msg << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
             assert(false && msg); \
             exit(1); \
         } while (0)
@@ -137,7 +145,7 @@ namespace multi_theory_horn {
     #define DEBUG_MSG(cmd) \
         do { \
             if (mtfp_debug) { \
-                std::cout << "-------------------------------------------------------" << std::endl; \
+                OUT() << "-------------------------------------------------------" << std::endl; \
                 cmd; \
             } \
         } while (0)
