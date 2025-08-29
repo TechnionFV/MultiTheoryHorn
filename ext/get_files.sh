@@ -11,6 +11,11 @@ SIZE_MIN=4
 SIZE_MAX=4
 SIZE_STEP=1
 
+# debug mode (true/false) - adds more logging
+# It is recommended to keep this false as it may clutter output files
+# and slow down the runs.
+DEBUG=false
+
 # Use SLURM (true) or run locally (false).
 # If set to true but `sbatch` is not found, we automatically fall back to local mode.
 USE_SLURM=true
@@ -99,7 +104,7 @@ if [[ "${USE_SLURM}" == "true" ]] && command -v sbatch >/dev/null 2>&1; then
     --job-name "${JOBNAME}" \
     --array=0-"${ZBMAX}" \
     --output="${SLURM_DIR}/slurm_%A_%a.out" \
-    --export=ALL,OUTDIR="${OUTDIR}",REPODIR="${REPODIR}",TIMEOUT="${TIMEOUT}",MEMOUT="${MEMOUT}",FORMAT_FIELDS="${FORMAT_FIELDS}" \
+    --export=ALL,OUTDIR="${OUTDIR}",REPODIR="${REPODIR}",TIMEOUT="${TIMEOUT}",MEMOUT="${MEMOUT}",FORMAT_FIELDS="${FORMAT_FIELDS}",DEBUG="${DEBUG}" \
     "${REPODIR}/ext/run_files.cmd"
 
   echo "# Submitted."
@@ -134,9 +139,9 @@ else
       --mem "${MEMOUT}" \
       --format "${FORMAT_FIELDS}" \
       "${SPEC}" \
-      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch
+      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
 
-    rc=$?
+    rc=$? # capture return code of the python call
     if [[ $rc -ne 0 ]]; then
       echo "WARN: run failed for spec '${SPEC}' (rc=${rc}); continuing..." >&2
     fi
