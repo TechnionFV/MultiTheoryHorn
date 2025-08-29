@@ -8,12 +8,14 @@ set -euo pipefail
 #   TIMEOUT        → CPU time limit (seconds)
 #   MEMOUT         → memory limit (MB)
 #   FORMAT_FIELDS  → colon-separated header for CSV (e.g., base:bench:size:result:Cpu:Status)
+#   DEBUG          → (optional) true/false; adds more logging if true (default: false)
 
 : "${OUTDIR:?OUTDIR not set}"
 : "${REPODIR:?REPODIR not set}"
 : "${TIMEOUT:?TIMEOUT not set}"
 : "${MEMOUT:?MEMOUT not set}"
 : "${FORMAT_FIELDS:?FORMAT_FIELDS not set}"
+: "${DEBUG:=false}"  # optional; defaults to false
 
 SPECS_FILE="${OUTDIR}/specs.list"
 BRUNCH="${REPODIR}/ext/brunch.py"
@@ -47,4 +49,4 @@ python3 "${BRUNCH}" \
   --mem "${MEMOUT}" \
   --format "${FORMAT_FIELDS}" \
   "${SPEC}" \
-  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch
+  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
