@@ -163,12 +163,15 @@ def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_ST
     p.wait ()
     cpuUsage = r.getrusage (r.RUSAGE_CHILDREN).ru_utime
 
+    import signal
+    result = 'TO' if -p.returncode == signal.SIGXCPU else ('OK' if p.returncode == 0 else 'ERROR')
+
     stats = dict()
     # Some common fields users often include in --format
     stats['base']   = base
     stats['bench']  = bench
     stats['size']   = size
-    stats['Result'] = 'UNKNOWN'
+    stats['result'] = result
     stats['Status'] = p.returncode
     stats['Cpu']    = '{0:.2f}'.format (cpuUsage - cpuTotal)
     cpuTotal = cpuUsage
@@ -224,7 +227,7 @@ def main (argv):
             stats['base']   = base
             stats['bench']  = 'PARSE_ERROR'
             stats['size']   = ''
-            stats['Result'] = 'ERROR'
+            stats['result'] = 'ERROR'
             stats['Status'] = 3
             stats['Cpu']    = '0.00'
             statsLine (statsfile, fmt, stats)
