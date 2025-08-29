@@ -1,19 +1,28 @@
 #!/bin/bash
 set -euo pipefail
 
-# CONTROL THE SWEEP HERE
-# =======================
-TIMEOUT=900 # 15 minutes
-MEMOUT=8192 # 8 GB
+# ==========================================================
+# CONTROL THE SWEEP HERE (no CLI args; edit this section)
+# ==========================================================
+
+TIMEOUT=900   # CPU time limit in seconds
+MEMOUT=8192   # Memory limit in MB
 SIZE_MIN=4
 SIZE_MAX=4
 SIZE_STEP=1
-# =======================
 
-# Where this repo lives; resolved relative to this script (../)
+# Use SLURM (true) or run locally (false).
+# If set to true but `sbatch` is not found, we automatically fall back to local mode.
+USE_SLURM=true
+
+# ==========================================================
+# Paths and derived locations
+# ==========================================================
+
+# Repo root (resolve relative to this script)
 REPODIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Build output location (binary expected at $REPODIR/build/bin/benchmarks)
+# Benchmarks binary
 BENCHBIN="${REPODIR}/build/bin/benchmarks"
 
 # Output root; a timestamped subdir will be created
@@ -25,9 +34,7 @@ FORMAT_FIELDS="base:bench:size:result:Cpu:Status"
 # Job name prefix (for SLURM)
 JOBNAME_PREFIX="bench_sweep"
 
-# =======================
 # Derived paths
-# =======================
 TS="$(date +%F_%H-%M-%S)"
 OUTDIR="${OUTPUT_ROOT}/benchmarks_${TS}"
 SLURM_DIR="${OUTDIR}/slurm"
@@ -35,14 +42,12 @@ TOOL_DIR="${OUTDIR}/tool"
 STATS_DIR="${OUTDIR}/stats"
 SPECS_FILE="${OUTDIR}/specs.list"
 
-# =======================
-# Prep dirs
-# =======================
-mkdir -p "${SLURM_DIR}" "${TOOL_DIR}" "${STATS_DIR}"
+# Ensure dirs
+mkdir -p "${OUTDIR}" "${SLURM_DIR}" "${TOOL_DIR}" "${STATS_DIR}"
 
-# =======================
+# ==========================================================
 # Discover enabled benchmarks
-# =======================
+# ==========================================================
 if [[ ! -x "${BENCHBIN}" ]]; then
   echo "error: benchmarks binary not found or not executable at: ${BENCHBIN}" >&2
   exit 1
@@ -59,12 +64,11 @@ if [[ ${#BENCHES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-# =======================
+# ==========================================================
 # Generate specs.list (bench:size)
-# =======================
+# ==========================================================
 : > "${SPECS_FILE}"  # truncate/create
 for b in "${BENCHES[@]}"; do
-  # skip blanks just in case
   [[ -z "$b" ]] && continue
   for (( sz=SIZE_MIN; sz<=SIZE_MAX; sz+=SIZE_STEP )); do
     echo "${b}:${sz}" >> "${SPECS_FILE}"
@@ -81,17 +85,63 @@ ZBMAX=$((NUMSPECS - 1))
 echo "# Specs generated: ${NUMSPECS}"
 echo "# Output dir: ${OUTDIR}"
 
-# =======================
-# Submit SLURM array
-# =======================
-JOBNAME="${JOBNAME_PREFIX}_${TS}"
-echo "# Submitting array: 0..${ZBMAX} (job-name: ${JOBNAME})"
+# ==========================================================
+# Decide mode: SLURM vs Local
+# ==========================================================
+if [[ "${USE_SLURM}" == "true" ]] && command -v sbatch >/dev/null 2>&1; then
+  # -------------------------
+  # SLURM ARRAY SUBMISSION
+  # -------------------------
+  JOBNAME="${JOBNAME_PREFIX}_${TS}"
+  echo "# Submitting SLURM array: 0..${ZBMAX} (job-name: ${JOBNAME})"
 
-sbatch \
-  --job-name "${JOBNAME}" \
-  --array=0-"${ZBMAX}" \
-  --output="${SLURM_DIR}/slurm_%A_%a.out" \
-  --export=ALL,OUTDIR="${OUTDIR}",REPODIR="${REPODIR}",TIMEOUT="${TIMEOUT}",MEMOUT="${MEMOUT}",FORMAT_FIELDS="${FORMAT_FIELDS}" \
-  "${REPODIR}/ext/run_files.cmd"
+  sbatch \
+    --job-name "${JOBNAME}" \
+    --array=0-"${ZBMAX}" \
+    --output="${SLURM_DIR}/slurm_%A_%a.out" \
+    --export=ALL,OUTDIR="${OUTDIR}",REPODIR="${REPODIR}",TIMEOUT="${TIMEOUT}",MEMOUT="${MEMOUT}",FORMAT_FIELDS="${FORMAT_FIELDS}" \
+    "${REPODIR}/ext/run_files.cmd"
 
-echo "# Submitted."
+  echo "# Submitted."
+else
+  # -------------------------
+  # LOCAL FALLBACK MODE
+  # -------------------------
+  echo "# Running locally (no SLURM)."
+  echo "# This may take a while if NUMSPECS is large."
+
+  BRUNCH="${REPODIR}/ext/brunch.py"
+
+  if [[ ! -f "${BRUNCH}" ]]; then
+    echo "error: brunch.py not found at ${BRUNCH}" >&2
+    exit 1
+  fi
+
+  # We want the whole sweep even if one run fails; temporarily relax -e
+  set +e
+  i=0
+  while IFS= read -r SPEC; do
+    ((i++))
+    [[ -z "${SPEC}" ]] && continue
+    echo "[$i/${NUMSPECS}] Spec: ${SPEC}"
+
+    # Invoke brunch.py, which will:
+    #  - capture tool stdout to ${OUTDIR}/tool/<bench>-<size>.stdout
+    #  - write per-run .stats and append to unified CSV in ${OUTDIR}/stats
+    python3 "${BRUNCH}" \
+      --out "${OUTDIR}" \
+      --cpu "${TIMEOUT}" \
+      --mem "${MEMOUT}" \
+      --format "${FORMAT_FIELDS}" \
+      "${SPEC}" \
+      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch
+
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+      echo "WARN: run failed for spec '${SPEC}' (rc=${rc}); continuing..." >&2
+    fi
+  done < "${SPECS_FILE}"
+  set -e
+
+  echo "# Local sweep complete. Results in: ${OUTDIR}"
+fi
