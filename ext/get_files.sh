@@ -5,10 +5,10 @@ set -euo pipefail
 # CONTROL THE SWEEP HERE (no CLI args; edit this section)
 # ==========================================================
 
-TIMEOUT=900   # CPU time limit in seconds
-MEMOUT=8192   # Memory limit in MB
-SIZE_MIN=4
-SIZE_MAX=4
+TIMEOUT=600   # CPU time limit in seconds (1 hour)
+MEMOUT=16384   # Memory limit in MB (16 GB)
+SIZE_MIN=2
+SIZE_MAX=16
 SIZE_STEP=1
 
 # debug mode (true/false) - adds more logging
@@ -23,6 +23,14 @@ USE_SLURM=true
 # ==========================================================
 # Paths and derived locations
 # ==========================================================
+
+# Check if Z3_ROOT is defined in the environment if it's not exit
+if [[ -z "${Z3_ROOT:-}" ]]; then
+  echo "error: Z3_ROOT environment variable is not set" >&2
+  exit 1
+fi
+
+export LD_LIBRARY_PATH=${Z3_ROOT}/build
 
 # Repo root (resolve relative to this script)
 REPODIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -105,7 +113,7 @@ if [[ "${USE_SLURM}" == "true" ]] && command -v sbatch >/dev/null 2>&1; then
     --array=0-"${ZBMAX}" \
     --output="${SLURM_DIR}/slurm_%A_%a.out" \
     --export=ALL,OUTDIR="${OUTDIR}",REPODIR="${REPODIR}",TIMEOUT="${TIMEOUT}",MEMOUT="${MEMOUT}",FORMAT_FIELDS="${FORMAT_FIELDS}",DEBUG="${DEBUG}" \
-    "${REPODIR}/ext/run_files.cmd"
+    "${REPODIR}/ext/run_files.sh"
 
   echo "# Submitted."
 else
