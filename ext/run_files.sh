@@ -7,7 +7,7 @@ set -euo pipefail
 #   REPODIR        → repo root (contains ext/brunch.py and build/bin/benchmarks)
 #   TIMEOUT        → CPU time limit (seconds)
 #   MEMOUT         → memory limit (MB)
-#   FORMAT_FIELDS  → colon-separated header for CSV (e.g., base:bench:size:result:Cpu:Status)
+#   FORMAT_FIELDS  → colon-separated header for CSV (e.g., base:bench:type:size:result:Cpu:Status)
 #   DEBUG          → (optional) true/false; adds more logging if true (default: false)
 
 : "${OUTDIR:?OUTDIR not set}"
