@@ -48,8 +48,8 @@ params get_bv_params(context& c) {
     return param;
 }
 
-// -------- Benchmarks --------
-check_result max_bv(unsigned int size) {
+// ===================== [max_bv] =====================
+check_result max_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -92,13 +92,21 @@ check_result max_bv(unsigned int size) {
     fp.add_rule(rule2, name2);
 
     // p(y,z,a,i), !(i < z), !(a == max(a,y)) --> false
-    expr query = exists(vars, p(y, z, a, i) && !ult(i, z) && !(a == (a ^ ((a ^ y) & ite(ult(a, y), c.bv_val(-1, size), c.bv_val(0, size))))));
+    expr bad_phi = !ult(i, z) && !(a == (a ^ ((a ^ y) & ite(ult(a, y), c.bv_val(-1, size), c.bv_val(0, size)))));
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(vars, p(y, z, a, i) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
 }
+check_result max_bv(unsigned int size) { return max_bv_base(size, /*is_sat=*/true); }
+check_result max_bv_unsat(unsigned int size) { return max_bv_base(size, /*is_sat=*/false); }
+// ===================== [max_bv] =====================
 
-check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variables
+
+// ===================== [max_multi] =====================
+check_result max_multi_base(unsigned int size, bool is_sat) { // int - - -> bv , unsigned variables
     context c;
 
     // Declare sorts
@@ -161,12 +169,19 @@ check_result max_multi(unsigned int size) { // int - - -> bv , unsigned variable
     query_vars.push_back(a_bv);
     expr query_bv_pred = q_bv(y_bv, a_bv);
     expr query_bv_phi =  !(a_bv == (a_bv ^ ((a_bv ^ y_bv) & ite(ult(a_bv, y_bv), c.bv_val(-1, size), c.bv_val(0, size)))));
+    if (!is_sat)
+        query_bv_phi = !query_bv_phi;
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);      
 
     return result;
 }
+check_result max_multi(unsigned int size) { return max_multi_base(size, true); }
+check_result max_multi_unsat(unsigned int size) { return max_multi_base(size, false); }
+// ===================== [max_multi] =====================
 
-check_result opposite_signs_bv(unsigned int size) {
+
+// ===================== [opposite_signs_bv] =====================
+check_result opposite_signs_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -205,13 +220,22 @@ check_result opposite_signs_bv(unsigned int size) {
     fp.add_rule(rule2, name2);
 
     // p(x,a,b), !(a < x), !(a,b have opposite signs) --> false
-    expr query = exists(vars, p(x, a, b) && !(a < x) && !((a ^ b) < 0));        
+    expr bad_phi = !(a < x) && !((a ^ b) < 0);
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(vars, p(x, a, b) && bad_phi);        
     check_result result = fp.query(query);
 
     return result;
 }
 
-check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, signed variables
+check_result opposite_signs_bv(unsigned int size) { return opposite_signs_bv_base(size, /*is_sat=*/true); }
+check_result opposite_signs_bv_unsat(unsigned int size) { return opposite_signs_bv_base(size, /*is_sat=*/false); }
+// ===================== [opposite_signs_bv] =====================
+
+
+// ===================== [opposite_signs_multi] =====================
+check_result opposite_signs_multi_base(unsigned int size, bool is_sat) {      // int - - -> bv, signed variables
     context c;
 
     // Declare sorts
@@ -269,12 +293,19 @@ check_result opposite_signs_multi(unsigned int size) {      // int - - -> bv, si
     query_vars.push_back(b_bv);
     expr query_bv_pred = q_bv(a_bv, b_bv);
     expr query_bv_phi = !((a_bv ^ b_bv) < 0);
+    if (!is_sat)
+        query_bv_phi = !query_bv_phi;
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
     return result;
 }
+check_result opposite_signs_multi(unsigned int size) { return opposite_signs_multi_base(size, /*is_sat=*/true); }
+check_result opposite_signs_multi_unsat(unsigned int size) { return opposite_signs_multi_base(size, /*is_sat=*/false); }
+// ===================== [opposite_signs_multi] =====================
 
-check_result abs_bv(unsigned int size) {
+
+// ===================== [abs_bv] =====================
+check_result abs_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -309,13 +340,21 @@ check_result abs_bv(unsigned int size) {
     fp.add_rule(rule2, name2);
 
     // p(x,y,i), !(i < y), !(x <= i) --> false
-    expr query = exists(x, y, i, p(x, y, i) && !(i < y) && !(x <= i));        
+    expr bad_phi = !(i < y) && !(x <= i);
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(x, y, i, p(x, y, i) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
 }
 
-check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variables
+check_result abs_bv(unsigned int size) { return abs_bv_base(size, /*is_sat=*/true); }
+check_result abs_bv_unsat(unsigned int size) { return abs_bv_base(size, /*is_sat=*/false); }
+// ===================== [abs_bv] =====================
+
+// ===================== [abs_multi] =====================
+check_result abs_multi_base(unsigned int size, bool is_sat) {      // bv - - -> int, signed variables
     context c;
 
     // Declare sorts
@@ -375,12 +414,20 @@ check_result abs_multi(unsigned int size) {      // bv - - -> int, signed variab
     query_vars.push_back(i_int);
     expr query_int_pred = q_int(x_int, y_int, i_int);
     expr query_int_phi = !(i_int < y_int) && !(x_int <= i_int);
+    if (!is_sat)
+        query_int_phi = !query_int_phi;
     check_result result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);      
 
     return result;
 }
 
-check_result cond_negate_bv(unsigned int size) {
+check_result abs_multi(unsigned int size) { return abs_multi_base(size, /*is_sat=*/true); }
+check_result abs_multi_unsat(unsigned int size) { return abs_multi_base(size, /*is_sat=*/false); }
+// ===================== [abs_multi] =====================
+
+
+// ===================== [cond_negate_bv] =====================
+check_result cond_negate_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -415,13 +462,22 @@ check_result cond_negate_bv(unsigned int size) {
     fp.add_rule(rule2, name2);
 
     // p(x,y,i), !(i < y), b == ite(i <= x,1,0), !((x ^ (-b)) + b == -x) --> false
-    expr query = exists(x, y, i, b, p(x, y, i) && !(i < y) && (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && !(((x ^ (-b)) + b) == -x));
+    expr bad_phi = !(i < y) && (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && !(((x ^ (-b)) + b) == -x);
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(x, y, i, b, p(x, y, i) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
 }
 
-check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signed variables
+check_result cond_negate_bv(unsigned int size) { return cond_negate_bv_base(size, /*is_sat=*/true); }
+check_result cond_negate_bv_unsat(unsigned int size) { return cond_negate_bv_base(size, /*is_sat=*/false); }
+// ===================== [cond_negate_bv] =====================
+
+
+// ===================== [cond_negate_multi] =====================
+check_result cond_negate_multi_base(unsigned int size, bool is_sat) {      // int - - -> bv, signed variables
     context c;
 
     // Declare sorts
@@ -482,12 +538,20 @@ check_result cond_negate_multi(unsigned int size) {      // int - - -> bv, signe
     query_vars.push_back(b_bv);
     expr query_bv_pred = q_bv(x_bv, i_bv, b_bv);
     expr query_bv_phi = (b_bv == ite(i_bv <= x_bv, c.bv_val(1, size), c.bv_val(0, size))) && !(((x_bv ^ (-b_bv)) + b_bv) == -x_bv);
+    if (!is_sat)
+        query_bv_phi = !query_bv_phi;
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
     return result;
 }
 
-check_result swap_bv(unsigned int size) {
+check_result cond_negate_multi(unsigned int size) { return cond_negate_multi_base(size, /*is_sat=*/true); }
+check_result cond_negate_multi_unsat(unsigned int size) { return cond_negate_multi_base(size, /*is_sat=*/false); }
+// ===================== [cond_negate_multi] =====================
+
+
+// ===================== [swap_bv] =====================
+check_result swap_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -592,13 +656,22 @@ check_result swap_bv(unsigned int size) {
     fp.add_rule(rule10, name10);
 
     // p4(x,z,a,b), !(b < z - x), !(a < b) --> false
-    expr query = exists(x, z, a, b, p4(x, z, a, b) && !ult(a, z - x) && !(ult(a, b)));
+    expr bad_phi = !ult(a, z - x) && !(ult(a, b));
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(x, z, a, b, p4(x, z, a, b) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
 }
 
-check_result swap_multi(unsigned int size) { // bv - - -> int, unsigned variables, multiple loops
+check_result swap_bv(unsigned int size) { return swap_bv_base(size, /*is_sat=*/true); }
+check_result swap_bv_unsat(unsigned int size) { return swap_bv_base(size, /*is_sat=*/false); }
+// ===================== [swap_bv] =====================
+
+
+// ===================== [swap_multi] =====================
+check_result swap_multi_base(unsigned int size, bool is_sat) { // bv - - -> int, unsigned variables, multiple loops
     context c;
 
     // Declare sorts
@@ -728,6 +801,8 @@ check_result swap_multi(unsigned int size) { // bv - - -> int, unsigned variable
     query_vars.push_back(b_int);
     expr query_int_pred = p4_int(x_int, z_int, a_int, b_int);
     expr query_int_phi = !(b_int < z_int - x_int) && !(a_int < b_int);
+    if (!is_sat)
+        query_int_phi = !query_int_phi;
     
     check_result result;
     result = mtfp.query(query_vars, query_int_pred, query_int_phi, Theory::IAUF);
@@ -735,7 +810,13 @@ check_result swap_multi(unsigned int size) { // bv - - -> int, unsigned variable
     return result;
 }
 
-check_result swap2_bv(unsigned int size) {
+check_result swap_multi(unsigned int size) { return swap_multi_base(size, /*is_sat=*/true); }
+check_result swap_multi_unsat(unsigned int size) { return swap_multi_base(size, /*is_sat=*/false); }
+// ===================== [swap_multi] =====================
+
+
+// ===================== [swap2_bv] =====================
+check_result swap2_bv_base(unsigned int size, bool is_sat) {
     context c;
     fixedpoint fp(c);
 
@@ -810,13 +891,22 @@ check_result swap2_bv(unsigned int size) {
     fp.add_rule(rule8, name8);
 
     // r3(a,b) && !(ult(a,b)) --> false
-    expr query = exists(a, b, r3(a, b) && !ult(a, b));
+    expr bad_phi = !ult(a, b);
+    if (!is_sat)
+        bad_phi = !bad_phi;
+    expr query = exists(a, b, r3(a, b) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
 }
 
-check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variables
+check_result swap2_bv(unsigned int size) { return swap2_bv_base(size, /*is_sat=*/true); }
+check_result swap2_bv_unsat(unsigned int size) { return swap2_bv_base(size, /*is_sat=*/false); }
+// ===================== [swap2_bv] =====================
+
+
+// ===================== [swap2_multi] =====================
+check_result swap2_multi_base(unsigned int size, bool is_sat) { // int - - -> bv , unsigned variables
     context c;
 
     // Declare sorts
@@ -903,10 +993,16 @@ check_result swap2_multi(unsigned int size) { // int - - -> bv , unsigned variab
     query_vars.push_back(e_bv);
     expr query_bv_pred = r0_bv(a_bv, b_bv, c_bv, d_bv, e_bv);
     expr query_bv_phi = (c_bv == (a_bv ^ b_bv)) && (d_bv == (c_bv ^ b_bv)) && (e_bv == (c_bv ^ d_bv)) && !(ult(e_bv, d_bv));
+    if (!is_sat)
+        query_bv_phi = !query_bv_phi;
     check_result result = mtfp.query(query_vars, query_bv_pred, query_bv_phi, Theory::BV);
 
     return result;
 }
+
+check_result swap2_multi(unsigned int size) { return swap2_multi_base(size, /*is_sat=*/true); }
+check_result swap2_multi_unsat(unsigned int size) { return swap2_multi_base(size, /*is_sat=*/false); }
+// ===================== [swap2_multi] =====================
 
 // ======================= MAIN LOGIC =======================
 
@@ -953,18 +1049,30 @@ static int run_benchmarks_cli(int argc, char** argv) {
 
     // TODO [Omer]: Decide which benchmarks to disable
     const std::unordered_map<std::string, Benchmark> REGISTRY = {
-        {"max_bv",               {max_bv, true}},
-        {"max_multi",            {max_multi, true}},
-        {"opposite_signs_bv",    {opposite_signs_bv, true}},
-        {"opposite_signs_multi", {opposite_signs_multi, true}},
-        {"abs_bv",               {abs_bv, true}},
-        {"abs_multi",            {abs_multi, true}},
-        {"cond_negate_bv",       {cond_negate_bv, true}},
-        {"cond_negate_multi",    {cond_negate_multi, true}},
-        {"swap_bv",              {swap_bv, true}},
-        {"swap_multi",           {swap_multi, true}},
-        {"swap2_bv",             {swap2_bv, true}},
-        {"swap2_multi",          {swap2_multi, true}}
+        {"max_bv",                      {max_bv,                        true}},
+        {"max_multi",                   {max_multi,                     true}},
+        {"opposite_signs_bv",           {opposite_signs_bv,             true}},
+        {"opposite_signs_multi",        {opposite_signs_multi,          true}},
+        {"abs_bv",                      {abs_bv,                        true}},
+        {"abs_multi",                   {abs_multi,                     true}},
+        {"cond_negate_bv",              {cond_negate_bv,                true}},
+        {"cond_negate_multi",           {cond_negate_multi,             true}},
+        {"swap_bv",                     {swap_bv,                       false}},
+        {"swap_multi",                  {swap_multi,                    false}},
+        {"swap2_bv",                    {swap2_bv,                      false}},
+        {"swap2_multi",                 {swap2_multi,                   false}},
+        {"max_bv_unsat",                {max_bv_unsat,                  true}},
+        {"max_multi_unsat",             {max_multi_unsat,               true}},
+        {"opposite_signs_bv_unsat",     {opposite_signs_bv_unsat,       true}},
+        {"opposite_signs_multi_unsat",  {opposite_signs_multi_unsat,    true}},
+        {"abs_bv_unsat",                {abs_bv_unsat,                  true}},
+        {"abs_multi_unsat",             {abs_multi_unsat,               true}},
+        {"cond_negate_bv_unsat",        {cond_negate_bv_unsat,          true}},
+        {"cond_negate_multi_unsat",     {cond_negate_multi_unsat,       true}},
+        {"swap_bv_unsat",               {swap_bv_unsat,                 false}},
+        {"swap_multi_unsat",            {swap_multi_unsat,              false}},
+        {"swap2_bv_unsat",              {swap2_bv_unsat,                false}},
+        {"swap2_multi_unsat",           {swap2_multi_unsat,             false}}
     };
 
     std::string bench = "";
