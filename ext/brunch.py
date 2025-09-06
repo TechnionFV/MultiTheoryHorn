@@ -170,6 +170,7 @@ def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_ST
     # Some common fields users often include in --format
     stats['base']   = base
     stats['bench']  = bench
+    stats['type']   = 'MULTI' if 'multi' in bench.lower() else 'BV'
     stats['size']   = size
     stats['result'] = result
     stats['Status'] = p.returncode
@@ -226,6 +227,7 @@ def main (argv):
             stats = dict()
             stats['base']   = base
             stats['bench']  = 'PARSE_ERROR'
+            stats['type']   = ''
             stats['size']   = ''
             stats['result'] = 'ERROR'
             stats['Status'] = 3

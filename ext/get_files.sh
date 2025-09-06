@@ -5,9 +5,9 @@ set -euo pipefail
 # CONTROL THE SWEEP HERE (no CLI args; edit this section)
 # ==========================================================
 
-TIMEOUT=600   # CPU time limit in seconds (1 hour)
+TIMEOUT=3600   # CPU time limit in seconds (1 hour)
 MEMOUT=16384   # Memory limit in MB (16 GB)
-SIZE_MIN=2
+SIZE_MIN=3
 SIZE_MAX=16
 SIZE_STEP=1
 
@@ -42,7 +42,7 @@ BENCHBIN="${REPODIR}/build/bin/benchmarks"
 OUTPUT_ROOT="${REPODIR}/out"
 
 # CSV fields (must match what brunch.py can populate)
-FORMAT_FIELDS="base:bench:size:result:Cpu:Status"
+FORMAT_FIELDS="base:bench:type:size:result:Cpu:Status"
 
 # Job name prefix (for SLURM)
 JOBNAME_PREFIX="bench_sweep"
