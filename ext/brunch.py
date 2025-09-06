@@ -181,8 +181,8 @@ def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_ST
     stats = collectStats (stats, outfile, prefix=prefix)
 
     statsLine (statsfile, fmt, stats)
-    if results_csv is not None:
-        statsLine (results_csv, fmt, stats)
+    # if results_csv is not None:
+    #     statsLine (results_csv, fmt, stats)
 
 def main (argv):
     args = parseArgs (argv[1:])
@@ -193,9 +193,9 @@ def main (argv):
     fmt = args.format.split (':')
 
     # Unified results CSV (header written once if missing)
-    results_csv = os.path.join (args.out, 'stats', 'benchmarks_results.csv')
-    if not os.path.exists(results_csv):
-        statsHeader (results_csv, fmt)
+    header_csv = os.path.join (args.out, 'stats', 'header.csv')
+    if not os.path.exists(header_csv):
+        statsHeader (header_csv, fmt)
 
     global cpuTotal
     import resource as r
@@ -233,7 +233,7 @@ def main (argv):
             stats['Status'] = 3
             stats['Cpu']    = '0.00'
             statsLine (statsfile, fmt, stats)
-            statsLine (results_csv, fmt, stats)
+            statsLine (header_csv, fmt, stats)
             continue
 
         runTool (args.tool_args, bench, size, base, args.out,
@@ -241,7 +241,7 @@ def main (argv):
                  mem=args.mem,
                  fmt=fmt,
                  prefix=args.prefix,
-                 results_csv=results_csv)
+                 results_csv=header_csv)
 
     return 0
 
