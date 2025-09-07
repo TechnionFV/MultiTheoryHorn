@@ -81,9 +81,9 @@ fi
 # Generate specs.list (bench:size)
 # ==========================================================
 : > "${SPECS_FILE}"  # truncate/create
-for b in "${BENCHES[@]}"; do
-  [[ -z "$b" ]] && continue
-  for (( sz=SIZE_MIN; sz<=SIZE_MAX; sz+=SIZE_STEP )); do
+for (( sz=SIZE_MIN; sz<=SIZE_MAX; sz+=SIZE_STEP )); do
+  for b in "${BENCHES[@]}"; do
+    [[ -z "$b" ]] && continue
     echo "${b}:${sz}" >> "${SPECS_FILE}"
   done
 done
