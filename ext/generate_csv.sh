@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./merge.sh <header.csv>
+# Usage: ./generate_csv.sh <header.csv>
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <header.csv>" >&2
