@@ -663,7 +663,7 @@ check_result swap_bv_base(unsigned int size, bool is_sat) {
     fp.add_rule(rule9, name9);
 
     // p4(x,z,a,b), b < z - x --> p4(x,z,a,b+1) 
-    expr rule10 = forall(x, z, a, b, implies(p4(x, z, a, b) && ult(a, z - x), p4(x, z, a, b + 1)));
+    expr rule10 = forall(x, z, a, b, implies(p4(x, z, a, b) && ult(b, z - x), p4(x, z, a, b + 1)));
     symbol name10 = c.str_symbol("rule10");
     fp.add_rule(rule10, name10);
 
@@ -673,7 +673,7 @@ check_result swap_bv_base(unsigned int size, bool is_sat) {
         // p4(x,z,a,b), !(b < z - x), (a < b) --> false
         bad_phi = !bad_phi;
     }
-    expr query = exists(x, z, a, b, p4(x, z, a, b) && !ult(a, z - x) && bad_phi);
+    expr query = exists(x, z, a, b, p4(x, z, a, b) && !ult(b, z - x) && bad_phi);
     check_result result = fp.query(query);
 
     return result;
@@ -1075,10 +1075,10 @@ static int run_benchmarks_cli(int argc, char** argv) {
         {"abs_multi",                   {abs_multi,                     true}},
         {"cond_negate_bv",              {cond_negate_bv,                true}},
         {"cond_negate_multi",           {cond_negate_multi,             true}},
-        {"swap_bv",                     {swap_bv,                       false}},
-        {"swap_multi",                  {swap_multi,                    false}},
-        {"swap2_bv",                    {swap2_bv,                      false}},
-        {"swap2_multi",                 {swap2_multi,                   false}},
+        {"swap_bv",                     {swap_bv,                       true}},
+        {"swap_multi",                  {swap_multi,                    true}},
+        {"swap2_bv",                    {swap2_bv,                      true}},
+        {"swap2_multi",                 {swap2_multi,                   true}},
         {"max_bv_unsat",                {max_bv_unsat,                  true}},
         {"max_multi_unsat",             {max_multi_unsat,               true}},
         {"opposite_signs_bv_unsat",     {opposite_signs_bv_unsat,       true}},
