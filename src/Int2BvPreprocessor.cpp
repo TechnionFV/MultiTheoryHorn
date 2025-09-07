@@ -1,6 +1,66 @@
 #include "Int2BvPreprocessor.h"
 
 namespace multi_theory_horn {
+    static z3::expr better_simplify(const z3::expr& e) {
+        z3::context& c = e.ctx();
+        z3::tactic T =
+            z3::tactic(c, "simplify")
+            & z3::tactic(c, "ctx-solver-simplify")
+            & z3::tactic(c, "simplify");
+
+        z3::goal g(c); g.add(e);
+        z3::apply_result r = T(g);
+        return r[0].as_expr();
+    }
+
+    static bool is_signed_relevant_func_app(Z3_decl_kind k) {
+        return (k == Z3_OP_ADD || k == Z3_OP_SUB ||
+                k == Z3_OP_MUL || k == Z3_OP_UMINUS ||
+                k == Z3_OP_DIV || k == Z3_OP_IDIV);
+    }
+
+    static bool is_unsigned_relevant_func_app(Z3_decl_kind k) {
+        return (k == Z3_OP_ADD || k == Z3_OP_SUB ||
+                k == Z3_OP_MUL || k == Z3_OP_UMINUS);
+    }
+
+    /// @brief Creates disjunction of all models of the given formula.
+    /// @param e The original formula.
+    /// @return A disjunction of all models of the formula.
+    /// For example: if e is (x >= 3) && (x < 5) && (y = 2), then the result is
+    /// (x = 3 && y = 2) || (x = 4 && y = 2)
+    static z3::expr create_formula_from_models(const z3::expr& e) {
+        z3::context& c = e.ctx();
+        z3::solver s(c);
+        s.add(e);
+
+        z3::expr_vector models(c);
+        while (s.check() == z3::sat) {
+            z3::model m = s.get_model();
+            z3::expr_vector model_conjuncts(c);
+
+            for (unsigned i = 0; i < m.size(); ++i) {
+                z3::func_decl v = m[i];
+                if (v.arity() == 0) { // Only consider constants (variables)
+                    z3::expr v_val = m.get_const_interp(v);
+                    model_conjuncts.push_back(v() == v_val);
+                }
+            }
+
+            z3::expr model_expr = model_conjuncts.size() == 1 ? model_conjuncts[0] : z3::mk_and(model_conjuncts);
+            models.push_back(model_expr);
+
+            // Add a blocking clause to prevent the same model from being found again
+            s.add(!model_expr);
+        }
+
+        if (models.empty()) {
+            return c.bool_val(false); // No models found
+        }
+
+        return models.size() == 1 ? models[0] : z3::mk_or(models);
+    }
+
     Int2BvPreprocessor::Int2BvPreprocessor(z3::context& c, unsigned bv_size, bool is_signed) :
         m_ctx(c),
         m_bv_size(bv_size),
@@ -84,16 +144,13 @@ namespace multi_theory_horn {
         Z3_decl_kind e_kind = e.decl().decl_kind();
         if (m_is_signed) {
             // Handle signed operations
-            if (e_kind == Z3_OP_ADD || e_kind == Z3_OP_SUB ||
-                e_kind == Z3_OP_MUL || e_kind == Z3_OP_UMINUS ||
-                e_kind == Z3_OP_DIV || e_kind == Z3_OP_IDIV) {
+            if (is_signed_relevant_func_app(e_kind)) {
                 z3::expr out_of_bounds_expr = create_term_out_of_bounds_expr(e);
                 func_app_out_of_bounds.push_back(out_of_bounds_expr);
             }
         }
-        
-        if (e_kind == Z3_OP_ADD || e_kind == Z3_OP_SUB ||
-            e_kind == Z3_OP_MUL || e_kind == Z3_OP_UMINUS) {
+
+        if (is_unsigned_relevant_func_app(e_kind)) {
             // Handle unsigned operations
             z3::expr out_of_bounds_expr = create_term_out_of_bounds_expr(e);
             func_app_out_of_bounds.push_back(out_of_bounds_expr);
@@ -218,7 +275,7 @@ namespace multi_theory_horn {
         }
         z3::expr res(m_ctx);
         res = e && bounds && rest;
-        return res.simplify();
+        return better_simplify(res);
     }
 
     z3::expr Int2BvPreprocessor::create_UNSAT_out_of_bounds_expr(const z3::expr& e) const {
@@ -258,7 +315,53 @@ namespace multi_theory_horn {
         }
         z3::expr res(m_ctx);
         res = !e && bounds && rest;
-        return res.simplify();
+        return better_simplify(res);
+    }
+
+    bool Int2BvPreprocessor::all_is_well(const z3::expr& e) const {
+        if (e.is_app()) {
+            Z3_decl_kind e_kind = e.decl().decl_kind();
+            if (m_is_signed && is_signed_relevant_func_app(e_kind)) {
+                return false;
+            }
+            if (!m_is_signed && is_unsigned_relevant_func_app(e_kind)) {
+                return false;
+            }
+        }
+        else if (e.is_numeral()) {
+            // If it's a constant, check if it's within bounds
+            return is_const_in_bounds(e);
+        }
+        // Recursively check all arguments
+        for (unsigned i = 0; i < e.num_args(); ++i) {
+            if (!all_is_well(e.arg(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    z3::expr Int2BvPreprocessor::create_psi_expr(const z3::expr& e) const {
+        if (all_is_well(e)) {
+            return e;
+        }
+
+        return create_formula_from_models(e);
+    }
+
+    z3::expr Int2BvPreprocessor::drop_out_of_bounds_literals(const z3::expr& e) const {
+        z3::expr_vector new_clauses(m_ctx);
+        for (unsigned i = 0; i < m_literals.size(); ++i) {
+            z3::expr_vector new_literals(m_ctx);
+            for (unsigned j = 0; j < m_literals[i].size(); ++j) {
+                if (!m_const_out_of_bounds[i][j]) {
+                    new_literals.push_back(m_literals[i][j]);
+                }
+            }
+            z3::expr disjunct = new_literals.size() == 1 ? new_literals[0] : z3::mk_or(new_literals);
+            new_clauses.push_back(disjunct);
+        }
+        return new_clauses.size() == 1 ? new_clauses[0] : z3::mk_and(new_clauses);
     }
 
     z3::expr Int2BvPreprocessor::create_SAT_out_of_bounds(const z3::expr& e) {
@@ -272,10 +375,17 @@ namespace multi_theory_horn {
     }
 
     z3::expr Int2BvPreprocessor::preprocess(const z3::expr& e) {
+        // Assume input is in CNF
         populate_data_structures(e);
         z3::expr psi = create_SAT_out_of_bounds_expr(e);
         z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e);
-        // TODO: Continue logic ...
-        return psi;
+
+        z3::expr psi_SAT = create_psi_expr(psi);
+        z3::expr psi_UNSAT = create_psi_expr(psi_tag);
+        z3::expr phi_1 = drop_out_of_bounds_literals(e);
+
+        z3::expr phi_2 = (phi_1 && !psi_UNSAT) || psi_SAT;
+
+        return better_simplify(phi_2);
     }
 } // namespace multi_theory_horn

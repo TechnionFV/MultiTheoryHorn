@@ -35,6 +35,8 @@ namespace multi_theory_horn {
         // Returns the number of conjuncts in an expression
         int calc_num_of_conjuncts(const z3::expr& e) const;
         int calc_num_of_disjuncts(const z3::expr& e) const;
+        int get_num_of_conjuncts() const;
+        int get_num_of_disjuncts(int conjunct) const;
 
         bool is_const_variable(const z3::expr& e) const;
 
@@ -46,19 +48,33 @@ namespace multi_theory_horn {
         void handle_term(const z3::expr& term, z3::expr_vector& func_app_out_of_bounds) const;
         void analyze_literal(const z3::expr& literal, bool& const_out_of_bounds, z3::expr_vector& func_app_out_of_bounds);
 
+        /// This function recursively checks e and 
+        /// returns true if everything is fine, i.e.,
+        /// 1. @param e has no function applications
+        /// 2. All constants in @param e are within bounds
+        bool all_is_well(const z3::expr& e) const;
+
         // The below functions assume the data structures are already populated
         z3::expr create_SAT_out_of_bounds_expr(const z3::expr& e) const;
         z3::expr create_UNSAT_out_of_bounds_expr(const z3::expr& e) const;
+        z3::expr create_psi_expr(const z3::expr& e) const;
+
+        /// Creates a new CNF expr from @param e by dropping out of bounds literals marked
+        /// in m_const_out_of_bounds, where m_const_out_of_bounds[i][j] maps to 
+        /// the j-th literal of the i-th conjunct.
+        /// Returns a fresh expr in e.ctx(); @param e is unchanged.
+        /// If a clause becomes empty after drops, the result is false.
+        z3::expr drop_out_of_bounds_literals(const z3::expr& e) const;
 
     public:
         explicit Int2BvPreprocessor(z3::context& c, unsigned bv_size, bool is_signed);
         void reset();
 
-        int get_num_of_conjuncts() const;
-        int get_num_of_disjuncts(int conjunct) const;
-
+        // Exposing main functionalities for testing purposes.
+        // Intended use is only for testing.
         z3::expr create_SAT_out_of_bounds(const z3::expr& e);
         z3::expr create_UNSAT_out_of_bounds(const z3::expr& e);
+
         z3::expr preprocess(const z3::expr& e);
     };
 } // namespace multi_theory_horn
