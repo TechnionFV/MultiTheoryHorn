@@ -170,12 +170,17 @@ namespace multi_theory_horn {
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
         if (m_is_signed) {
-            int64_t N = (int64_t)1 << (m_bv_size - 1);
-            return const_e.get_numeral_int() >= -N && const_e.get_numeral_int() <= N - 1;
+            uint64_t N = (uint64_t)1 << (m_bv_size - 1);
+            return const_e.get_numeral_int64() >= (int64_t)(-N) && const_e.get_numeral_int64() <= N - 1;
         }
 
-        int64_t N = (uint64_t)1 << m_bv_size;
-        return const_e.get_numeral_int() >= 0 && const_e.get_numeral_int() <= N - 1;
+        uint64_t upper_bound;
+        assert(m_bv_size <= 64 && "Unexpected bv size");
+        if (m_bv_size < 64)
+            upper_bound = ((uint64_t)1 << m_bv_size) - 1;
+        else
+            upper_bound = std::numeric_limits<uint64_t>::max();
+        return const_e.get_numeral_uint64() >= 0 && const_e.get_numeral_uint64() <= upper_bound;
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {

@@ -40,7 +40,7 @@ namespace multi_theory_horn {
         // Custom implementation of common operations which could simplify
         // the final expression
         z3::expr pow2(const z3::expr& e);
-        z3::expr if_eq(const z3::expr& e, unsigned k, const z3::expr& th, const z3::expr& el);
+        z3::expr if_eq(const z3::expr& e, uint64_t k, const z3::expr& th, const z3::expr& el);
 
         // Helper utility functions
         bool is_basic(const z3::expr& e) const;
