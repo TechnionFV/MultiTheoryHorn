@@ -24,6 +24,7 @@
 #include <vector>
 #include <stdexcept>
 #include <cstring>
+#include <limits>
 
 using namespace z3;
 using namespace multi_theory_horn;
@@ -31,11 +32,16 @@ using namespace multi_theory_horn;
 // -------- Helpers --------
 expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
     if (is_signed) {
-        int N = (uint64_t)1 << (k - 1);
-        return (c.int_val(-N) <= e) && (e < c.int_val(N));
+        uint64_t N = (uint64_t)1 << (k - 1);
+        return (c.int_val((int64_t)-N) <= e) && (e <= c.int_val(N-1));
     }
-    uint64_t N = (uint64_t)1 << k;
-    return (c.int_val(0) <= e) && (e < c.int_val(N));
+    assert(k <= 64 && "Bit-vector size too large");
+    uint64_t upper_bound;
+    if (k < 64)
+        upper_bound = (uint64_t)1 << k;
+    else
+        upper_bound = std::numeric_limits<uint64_t>::max();
+    return (c.int_val(0) <= e) && (e <= c.int_val(upper_bound));
 }
 
 params get_bv_params(context& c) {
