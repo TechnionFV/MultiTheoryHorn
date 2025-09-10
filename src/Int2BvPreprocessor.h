@@ -8,6 +8,7 @@
 #include "utils.h"
 #include <z3++.h>
 #include <unordered_set>
+#include <limits>
 
 namespace multi_theory_horn {
     class Int2BvPreprocessor {
