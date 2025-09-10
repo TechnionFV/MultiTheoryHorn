@@ -244,7 +244,8 @@ namespace multi_theory_horn {
                         // Strengthen the strengthening expression
                         auto st_it = p_to_strengthening_expr_map.find(p_decl);
                         assert(st_it != p_to_strengthening_expr_map.end());
-                        st_it->second = st_it->second && p_interp;
+                        if (!p_interp.is_true())
+                            st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
@@ -257,7 +258,8 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
                         
                         // Strengthn the fact
-                        fact_config->first.body_formula = fact_config->first.body_formula && bv_p_interp;
+                        if (!bv_p_interp.is_true())
+                            fact_config->first.body_formula = fact_config->first.body_formula && bv_p_interp;
                         z3::expr new_fact = fact_config->first.get_rule_expr();
                         DEBUG_MSG(OUT() << "New fact: " << new_fact << std::endl);
 
@@ -284,7 +286,8 @@ namespace multi_theory_horn {
                         // Strengthen the strengthening expression
                         auto st_it = p_to_strengthening_expr_map.find(p_decl);
                         assert(st_it != p_to_strengthening_expr_map.end());
-                        st_it->second = st_it->second && p_interp;
+                        if (!p_interp.is_true())
+                            st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
@@ -297,7 +300,8 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
 
                         // Strengthn the fact
-                        fact_config->first.body_formula = fact_config->first.body_formula && int_p_interp;
+                        if (!int_p_interp.is_true())
+                            fact_config->first.body_formula = fact_config->first.body_formula && int_p_interp;
                         z3::expr new_fact = fact_config->first.get_rule_expr();
                         DEBUG_MSG(OUT() << "New fact: " << new_fact << std::endl);
 
