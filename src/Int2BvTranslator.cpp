@@ -106,7 +106,7 @@ namespace multi_theory_horn {
             case Z3_OP_ANUM:
                 // Translate numeral to BV
                 assert(e.is_numeral() && "Z3_OP_ANUM should only be used with numerals");
-                r = ctx.bv_val(e.get_numeral_int(), m_bv_size);
+                r = ctx.bv_val(e.get_numeral_int64(), m_bv_size);
                 break;
             case Z3_OP_AGNUM:
             case Z3_OP_TO_REAL:

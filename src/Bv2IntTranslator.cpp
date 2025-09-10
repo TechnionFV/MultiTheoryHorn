@@ -127,7 +127,7 @@ namespace multi_theory_horn {
         switch (f) {
             case Z3_OP_BNUM: {
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
-                unsigned int raw = e.get_numeral_uint();
+                uint64_t raw = e.get_numeral_uint64();
                 r = ctx.int_val(raw);
                 break;
             }
@@ -477,9 +477,9 @@ namespace multi_theory_horn {
         return e;
     }
 
-    z3::expr Bv2IntTranslator::if_eq(const z3::expr& e, unsigned k, const z3::expr& th, const z3::expr& el){
+    z3::expr Bv2IntTranslator::if_eq(const z3::expr& e, uint64_t k, const z3::expr& th, const z3::expr& el){
         if (e.is_numeral()) {
-            if (e.get_numeral_uint() == k){
+            if (e.get_numeral_uint64() == k){
                 return th;
             } else {
                 return el;
@@ -503,7 +503,7 @@ namespace multi_theory_horn {
         z3::expr rhs = eq.arg(0).arg(1);
 
         // Early exit if rhs is not a numeral or not equal to N, or lhs is not a constant variable
-        if (!rhs.is_numeral() || rhs.get_numeral_uint() != N  || !is_const_variable(lhs)) {
+        if (!rhs.is_numeral() || rhs.get_numeral_uint64() != N  || !is_const_variable(lhs)) {
             return eq;
         }
 
@@ -515,7 +515,7 @@ namespace multi_theory_horn {
             return eq;
         }
 
-        int value = m.get_numeral_uint();
+        uint64_t value = m.get_numeral_uint64();
         // Early exit in case the value in the interval [0, N-1]
         if (value < 0 || value >= N) {
             return eq;
@@ -531,9 +531,9 @@ namespace multi_theory_horn {
             }
 
             // Return simplified equality
-            return lhs == value;
+            return lhs == ctx.int_val((int64_t)value);
         }
 
-        return lhs == value;
+        return lhs == ctx.int_val(value);
     }
 } // namespace multi_theory_horn
