@@ -32,7 +32,7 @@ namespace multi_theory_horn {
         return Z3_OP_LE <= f && f <= Z3_OP_GT && has_int_arg;
     }
 
-    z3::expr Int2BvTranslator::translate(const z3::expr& e) {
+    z3::expr Int2BvTranslator::translate_aux(const z3::expr& e) {
         Z3_ast key = e; // implicit cast to Z3_ast
         auto it = m_translate.find(key);
         // This condition is important, it prevents redundant work
@@ -96,7 +96,7 @@ namespace multi_theory_horn {
         // Collect arguments
         std::vector<z3::expr> args;
         for (unsigned i = 0; i < e.num_args(); ++i)
-            args.push_back(translate(e.arg(i)));
+            args.push_back(translate_aux(e.arg(i)));
         
         // Result expression
         z3::expr r(ctx);
@@ -165,15 +165,15 @@ namespace multi_theory_horn {
         assert(is_basic(e) && "Expected a basic expression (equality or ite)");
         if (e.is_ite()) {
             // ite is translated to ite
-            z3::expr cond = translate(e.arg(0));
-            z3::expr then_branch = translate(e.arg(1));
-            z3::expr else_branch = translate(e.arg(2));
+            z3::expr cond = translate_aux(e.arg(0));
+            z3::expr then_branch = translate_aux(e.arg(1));
+            z3::expr else_branch = translate_aux(e.arg(2));
             return ite(cond, then_branch, else_branch);
         }
         else {
             // Equality
-            z3::expr lhs = translate(e.arg(0));
-            z3::expr rhs = translate(e.arg(1));
+            z3::expr lhs = translate_aux(e.arg(0));
+            z3::expr rhs = translate_aux(e.arg(1));
             return lhs == rhs;
         }
         return e;
@@ -183,11 +183,20 @@ namespace multi_theory_horn {
         assert(!is_special_basic(e) && "Expected a basic expression (not ite or equality)");
         z3::expr_vector new_args(ctx);
         for (unsigned i = 0; i < e.num_args(); ++i) {
-            new_args.push_back(translate(e.arg(i)));
+            new_args.push_back(translate_aux(e.arg(i)));
         }
         
         // Create a new application with the translated arguments
         return e.decl()(new_args);
+    }
+
+    z3::expr Int2BvTranslator::translate(const z3::expr& e, bool preprocess) {
+        if (!preprocess)
+            return translate_aux(e);
+        Int2BvPreprocessor preprocessor(ctx, m_bv_size, m_is_signed);
+        z3::expr preprocessed = preprocessor.preprocess(e);
+        DEBUG_MSG(OUT() << "Preprocessed expr: " << preprocessed << "\n");
+        return translate_aux(preprocessed);
     }
 
 } // namespace multi_theory_horn

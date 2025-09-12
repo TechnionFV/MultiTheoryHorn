@@ -368,8 +368,13 @@ bins/
 # MacOS specific files
 *.dSYM
 
-# Z3 related files
+# Z3 related files and z3 softlinks
 .z3*
+z3
+
+# Output
+out
+*.out
 
 # vscode
 .vscode/

@@ -1,5 +1,13 @@
 #include "Int2BvPreprocessor.h"
 
+#define PREPROCESSOR_DEBUG 0
+#if PREPROCESSOR_DEBUG
+  #define PRE_DEBUG(x) \
+    DEBUG_MSG(OUT() << "[PREPROCESSOR] " << x)
+#else
+  #define PRE_DEBUG(x) do {} while (0)
+#endif
+
 namespace multi_theory_horn {
     static z3::expr better_simplify(const z3::expr& e) {
         z3::context& c = e.ctx();
@@ -100,7 +108,7 @@ namespace multi_theory_horn {
         z3::expr res(m_ctx);
 
         if (m_is_signed) {
-            int64_t N = (int64_t)1 << (m_bv_size - 1);
+            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
             switch (e_kind) {
                 case Z3_OP_ADD:
                 case Z3_OP_SUB:
@@ -108,27 +116,27 @@ namespace multi_theory_horn {
                     res = !create_bounds_expr(e);
                     break;
                 case Z3_OP_UMINUS:
-                    res = (e.arg(0) == m_ctx.int_val(-N));
+                    res = (e.arg(0) == m_ctx.int_val(lower_bound));
                     break;
                 case Z3_OP_DIV:
                 case Z3_OP_IDIV:
-                    res = ((e.arg(0) == m_ctx.int_val(-N)) && (e.arg(1) == m_ctx.int_val(-1)));
+                    res = ((e.arg(0) == m_ctx.int_val(lower_bound)) && (e.arg(1) == m_ctx.int_val(-1)));
                     break;
                 default:
                     UNREACHABLE();
             }
         }
         else {
-            int64_t N = (uint64_t)1 << m_bv_size;
+            uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
             switch (e_kind) {
                 case Z3_OP_ADD:
-                    res = (e > m_ctx.int_val(N - 1));
+                    res = (e > m_ctx.int_val(upper_bound));
                     break;
                 case Z3_OP_SUB:
                     res = (e.arg(0) < e.arg(1));
                     break;
                 case Z3_OP_MUL:
-                    res = (e > m_ctx.int_val(N - 1));
+                    res = (e > m_ctx.int_val(upper_bound));
                     break;
                 case Z3_OP_UMINUS:
                     res = (e.arg(0) != m_ctx.int_val(0));
@@ -170,17 +178,15 @@ namespace multi_theory_horn {
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
         if (m_is_signed) {
-            uint64_t N = (uint64_t)1 << (m_bv_size - 1);
-            return const_e.get_numeral_int64() >= (int64_t)(-N) && const_e.get_numeral_int64() <= N - 1;
+            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
+            int64_t upper_bound = get_signed_bv_upper_bound(m_bv_size);
+            return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
         }
 
-        uint64_t upper_bound;
+        uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
+        uint64_t lower_bound = get_unsigned_bv_lower_bound(m_bv_size);
         assert(m_bv_size <= 64 && "Unexpected bv size");
-        if (m_bv_size < 64)
-            upper_bound = ((uint64_t)1 << m_bv_size) - 1;
-        else
-            upper_bound = std::numeric_limits<uint64_t>::max();
-        return const_e.get_numeral_uint64() >= 0 && const_e.get_numeral_uint64() <= upper_bound;
+        return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {
@@ -363,9 +369,13 @@ namespace multi_theory_horn {
                     new_literals.push_back(m_literals[i][j]);
                 }
             }
+            if (new_literals.empty())
+                continue;
             z3::expr disjunct = new_literals.size() == 1 ? new_literals[0] : z3::mk_or(new_literals);
             new_clauses.push_back(disjunct);
         }
+        if (new_clauses.empty())
+            return m_ctx.bool_val(true);
         return new_clauses.size() == 1 ? new_clauses[0] : z3::mk_and(new_clauses);
     }
 
@@ -383,13 +393,18 @@ namespace multi_theory_horn {
         // Assume input is in CNF
         populate_data_structures(e);
         z3::expr psi = create_SAT_out_of_bounds_expr(e);
+        PRE_DEBUG("psi (SATOutOfBounds): " << psi << "\n");
         z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e);
+        PRE_DEBUG("psi_tag (UNSATOutOfBounds): " << psi_tag << "\n");
 
         z3::expr psi_SAT = create_psi_expr(psi);
+        PRE_DEBUG("psi_SAT: " << psi_SAT << "\n");
         z3::expr psi_UNSAT = create_psi_expr(psi_tag);
+        PRE_DEBUG("psi_UNSAT: " << psi_UNSAT << "\n");
         z3::expr phi_1 = drop_out_of_bounds_literals(e);
-
+        PRE_DEBUG("phi_1: " << phi_1 << "\n");
         z3::expr phi_2 = (phi_1 && !psi_UNSAT) || psi_SAT;
+        PRE_DEBUG("phi_2: " << phi_2 << "\n");
 
         return better_simplify(phi_2);
     }
