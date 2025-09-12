@@ -60,6 +60,7 @@ namespace multi_theory_horn {
         int64_t N_half = (int64_t)1 << (m_bv_size - 1);
         z3::expr_vector bound_lemmas(m_ctx);
         z3::expr tmp(m_ctx);
+        // TODO: Consider being consistent with the rest of project and use <=
         for (const z3::expr& var : vars) {
             assert(var.is_int());
             if (m_is_signed)
@@ -75,10 +76,10 @@ namespace multi_theory_horn {
     //==============================================================================
     //                              PUBLIC METHODS
     //==============================================================================
-    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool simplify)
+    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess, bool simplify)
         : m_ctx(ctx),m_fp_int(ctx), m_fp_bv(ctx),
           m_bv_size(bv_size), m_is_signed(is_signed),
-          m_simplify(simplify) {
+          m_int2bv_preprocess(int2bv_preprocess), m_simplify(simplify) {
         // Set the solvers to use spacer engines for integer and bit-vector theories.
         z3::params p(ctx);
         p.set("engine", "spacer");
@@ -238,7 +239,7 @@ namespace multi_theory_horn {
 
                         // Initialize the translator
                         Int2BvTranslator int2bv_t(m_ctx, m_is_signed, m_bv_size, m_simplify);
-                        z3::expr bv_p_interp = int2bv_t.translate(p_interp);
+                        z3::expr bv_p_interp = int2bv_t.translate(p_interp, /*preprocess*/ m_int2bv_preprocess);
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
@@ -257,7 +258,7 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Fact name: " << fact_name << std::endl);
                         DEBUG_MSG(OUT() << "Old fact: " << fact_config->first.get_rule_expr() << std::endl);
                         
-                        // Strengthn the fact
+                        // Strengthen the fact
                         if (!bv_p_interp.is_true())
                             fact_config->first.body_formula = fact_config->first.body_formula && bv_p_interp;
                         z3::expr new_fact = fact_config->first.get_rule_expr();
@@ -335,7 +336,7 @@ namespace multi_theory_horn {
                         z3::expr phi = get_refutation_leaf_phi(q, original_vars);
                         DEBUG_MSG(OUT() << "phi: " << phi << std::endl);
 
-                        z3::expr phi_trans = int2bv_t.translate(phi);
+                        z3::expr phi_trans = int2bv_t.translate(phi, /*preprocess*/ m_int2bv_preprocess);
                         DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);
                         z3::expr_vector translated_vars = int2bv_t.vars();
                         

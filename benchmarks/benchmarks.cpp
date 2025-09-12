@@ -24,24 +24,24 @@
 #include <vector>
 #include <stdexcept>
 #include <cstring>
-#include <limits>
 
 using namespace z3;
 using namespace multi_theory_horn;
 
 // -------- Helpers --------
+bool gno_int2bv_preprocess = false;
+
 expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
     if (is_signed) {
         uint64_t N = (uint64_t)1 << (k - 1);
-        return (c.int_val((int64_t)-N) <= e) && (e <= c.int_val(N-1));
+        int64_t lower_bound = get_signed_bv_lower_bound(k);
+        int64_t upper_bound = get_signed_bv_upper_bound(k);
+        return (c.int_val(lower_bound) <= e) && (e <= c.int_val(upper_bound));
     }
     assert(k <= 64 && "Bit-vector size too large");
-    uint64_t upper_bound;
-    if (k < 64)
-        upper_bound = (uint64_t)1 << k;
-    else
-        upper_bound = std::numeric_limits<uint64_t>::max();
-    return (c.int_val(0) <= e) && (e <= c.int_val(upper_bound));
+    uint64_t upper_bound = get_unsigned_bv_upper_bound(k);
+    uint64_t lower_bound = get_unsigned_bv_lower_bound(k);
+    return (c.int_val(lower_bound) <= e) && (e <= c.int_val(upper_bound));
 }
 
 params get_bv_params(context& c) {
@@ -122,7 +122,7 @@ check_result max_multi_base(unsigned int size, bool is_sat) { // int - - -> bv ,
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ false, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ false, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, int_sort, bool_sort);
@@ -253,7 +253,7 @@ check_result opposite_signs_multi_base(unsigned int size, bool is_sat) {      //
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, bool_sort);
@@ -374,7 +374,7 @@ check_result abs_multi_base(unsigned int size, bool is_sat) {      // bv - - -> 
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare bv relations
     func_decl p_bv = function("p_bv", bv_sort, bv_sort, bool_sort);
@@ -501,7 +501,7 @@ check_result cond_negate_multi_base(unsigned int size, bool is_sat) {      // in
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ true, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, bool_sort);
@@ -699,7 +699,7 @@ check_result swap_multi_base(unsigned int size, bool is_sat) { // bv - - -> int,
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ false, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ false, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare bv relations
     func_decl p0_bv = function("p0_bv", bv_sort, bv_sort, bv_sort, bool_sort);
@@ -936,7 +936,7 @@ check_result swap2_multi_base(unsigned int size, bool is_sat) { // int - - -> bv
     sort int_sort = c.int_sort();
     sort bool_sort = c.bool_sort();
 
-    MT_fixedpoint mtfp(c, /* is_signed */ false, size);
+    MT_fixedpoint mtfp(c, /* is_signed */ false, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
 
     // Declare int relations
     func_decl p_int = function("p_int", int_sort, int_sort, int_sort, int_sort, bool_sort);
@@ -1059,6 +1059,7 @@ static void print_help() {
         "  --help           Show this help\n"
         "  --quiet          Don't print anything\n"
         "  --brunch         Print results in BRUNCH_STAT format (bench, size, result)\n"
+        "  --no_preprocess  Don't preprocess int2bv translator inputs\n"
         "  --output <file>  Redirect output to given file\n"
         "\n"
         "Exit codes: 0=SAT, 1=UNSAT, 2=UNKNOWN, 3=error\n";
@@ -1073,30 +1074,30 @@ static int run_benchmarks_cli(int argc, char** argv) {
 
     // TODO [Omer]: Decide which benchmarks to disable
     const std::unordered_map<std::string, Benchmark> REGISTRY = {
-        {"max_bv",                      {max_bv,                        true}},
+        {"max_bv",                      {max_bv,                        false}},
         {"max_multi",                   {max_multi,                     true}},
-        {"opposite_signs_bv",           {opposite_signs_bv,             true}},
+        {"opposite_signs_bv",           {opposite_signs_bv,             false}},
         {"opposite_signs_multi",        {opposite_signs_multi,          true}},
-        {"abs_bv",                      {abs_bv,                        true}},
+        {"abs_bv",                      {abs_bv,                        false}},
         {"abs_multi",                   {abs_multi,                     true}},
-        {"cond_negate_bv",              {cond_negate_bv,                true}},
+        {"cond_negate_bv",              {cond_negate_bv,                false}},
         {"cond_negate_multi",           {cond_negate_multi,             true}},
-        {"swap_bv",                     {swap_bv,                       true}},
-        {"swap_multi",                  {swap_multi,                    true}},
-        {"swap2_bv",                    {swap2_bv,                      true}},
-        {"swap2_multi",                 {swap2_multi,                   true}},
-        {"max_bv_unsat",                {max_bv_unsat,                  true}},
-        {"max_multi_unsat",             {max_multi_unsat,               true}},
-        {"opposite_signs_bv_unsat",     {opposite_signs_bv_unsat,       true}},
-        {"opposite_signs_multi_unsat",  {opposite_signs_multi_unsat,    true}},
-        {"abs_bv_unsat",                {abs_bv_unsat,                  true}},
-        {"abs_multi_unsat",             {abs_multi_unsat,               true}},
-        {"cond_negate_bv_unsat",        {cond_negate_bv_unsat,          true}},
-        {"cond_negate_multi_unsat",     {cond_negate_multi_unsat,       true}},
-        {"swap_bv_unsat",               {swap_bv_unsat,                 true}},
-        {"swap_multi_unsat",            {swap_multi_unsat,              true}},
-        {"swap2_bv_unsat",              {swap2_bv_unsat,                true}},
-        {"swap2_multi_unsat",           {swap2_multi_unsat,             true}}
+        {"swap_bv",                     {swap_bv,                       false}},
+        {"swap_multi",                  {swap_multi,                    false}},
+        {"swap2_bv",                    {swap2_bv,                      false}},
+        {"swap2_multi",                 {swap2_multi,                   false}},
+        {"max_bv_unsat",                {max_bv_unsat,                  false}},
+        {"max_multi_unsat",             {max_multi_unsat,               false}},
+        {"opposite_signs_bv_unsat",     {opposite_signs_bv_unsat,       false}},
+        {"opposite_signs_multi_unsat",  {opposite_signs_multi_unsat,    false}},
+        {"abs_bv_unsat",                {abs_bv_unsat,                  false}},
+        {"abs_multi_unsat",             {abs_multi_unsat,               false}},
+        {"cond_negate_bv_unsat",        {cond_negate_bv_unsat,          false}},
+        {"cond_negate_multi_unsat",     {cond_negate_multi_unsat,       false}},
+        {"swap_bv_unsat",               {swap_bv_unsat,                 false}},
+        {"swap_multi_unsat",            {swap_multi_unsat,              false}},
+        {"swap2_bv_unsat",              {swap2_bv_unsat,                false}},
+        {"swap2_multi_unsat",           {swap2_multi_unsat,             false}}
     };
 
     std::string bench = "";
@@ -1134,6 +1135,8 @@ static int run_benchmarks_cli(int argc, char** argv) {
             brunch = true;
         } else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
             output_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--no_preprocess") == 0) {
+            gno_int2bv_preprocess = true;
         } else if (std::strcmp(argv[i], "--debug") == 0) {
             // hidden dev option
             set_mtfp_debug(true);

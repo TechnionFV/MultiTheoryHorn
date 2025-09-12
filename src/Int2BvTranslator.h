@@ -6,6 +6,7 @@
 
 #pragma once
 #include "utils.h"
+#include "Int2BvPreprocessor.h"
 #include <iostream>
 #include <z3++.h>
 #include <unordered_map>
@@ -37,6 +38,8 @@ namespace multi_theory_horn {
         z3::expr translate_basic(const z3::expr& e);
         z3::expr translate_special_basic(const z3::expr& e);
 
+        z3::expr translate_aux(const z3::expr& e);
+
     public:
         explicit Int2BvTranslator(z3::context& c, bool is_signed,
                                   unsigned bv_size, bool simplify = true,
@@ -47,7 +50,7 @@ namespace multi_theory_horn {
         void reset();
 
         // Translate any expr; caches results in m_translate
-        z3::expr translate(const z3::expr& e);
+        z3::expr translate(const z3::expr& e, bool preprocess = false);
         
         // Accessors for the collected vars
         const z3::expr_vector& vars() const { return m_vars; }

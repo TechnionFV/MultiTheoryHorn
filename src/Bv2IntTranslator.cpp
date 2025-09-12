@@ -430,6 +430,7 @@ namespace multi_theory_horn {
     void Bv2IntTranslator::create_bound_lemma(z3::expr& var, unsigned k) {
         // Create a lemma for the variable var, which is an Int variable
         // with bounds [0, 2^k - 1] if unsigned, or [-2^(k-1), 2^(k-1) - 1] if signed.
+        // TODO: Consider being consistent with the rest of project and use <=
         if (m_is_signed) {
             int64_t N = (int64_t)1 << (k - 1);
             z3::expr lemma = (var >= ctx.int_val(-N)) && (var < ctx.int_val(N));

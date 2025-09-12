@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <optional>
 #include <z3++.h>
+#include <limits>
 
 namespace multi_theory_horn {
 
@@ -103,6 +104,21 @@ namespace multi_theory_horn {
         if (u & (1 << (width-1)))
             u -= (1 << width);
         return u;
+    }
+
+    inline int64_t get_signed_bv_lower_bound(unsigned bv_size) {
+        return -(int64_t(1) << (bv_size - 1));
+    }
+    inline int64_t get_signed_bv_upper_bound(unsigned bv_size) {
+        return (int64_t(1) << (bv_size - 1)) - 1;
+    }
+    inline uint64_t get_unsigned_bv_upper_bound(unsigned bv_size) {
+        if (bv_size >= 64)
+            return std::numeric_limits<uint64_t>::max();
+        return (uint64_t(1) << bv_size) - 1;
+    }
+    inline uint64_t get_unsigned_bv_lower_bound(unsigned bv_size) {
+        return 0;
     }
 
     // Centralized output sinks (default to std::cout/std::cerr)
