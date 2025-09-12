@@ -43,10 +43,17 @@ echo "Spec: ${SPEC}"
 #   - record per-run .stats in ${OUTDIR}/stats/<bench>-<size>.stats
 #   - append to unified CSV at ${OUTDIR}/stats/benchmarks_results.csv
 #   - capture tool stdout into ${OUTDIR}/tool/<bench>-<size>.stdout
-python3 "${BRUNCH}" \
+CMD=(python3 "${BRUNCH}" \
   --out "${OUTDIR}" \
   --cpu "${TIMEOUT}" \
   --mem "${MEMOUT}" \
   --format "${FORMAT_FIELDS}" \
   "${SPEC}" \
-  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
+  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch)
+
+if [[ "${DEBUG}" == "true" ]]; then
+  CMD+=("--debug")
+fi
+
+echo "${CMD[@]}"
+"${CMD[@]}"
