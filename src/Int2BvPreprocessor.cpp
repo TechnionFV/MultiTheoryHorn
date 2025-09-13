@@ -1,6 +1,6 @@
 #include "Int2BvPreprocessor.h"
 
-#define PREPROCESSOR_DEBUG 0
+#define PREPROCESSOR_DEBUG 1
 #if PREPROCESSOR_DEBUG
   #define PRE_DEBUG(x) \
     DEBUG_MSG(OUT() << "[PREPROCESSOR] " << x)
@@ -390,18 +390,23 @@ namespace multi_theory_horn {
     }
 
     z3::expr Int2BvPreprocessor::preprocess(const z3::expr& e) {
+        InstCombiner combiner = InstCombiner(m_ctx);
+        // Help the preprocessor by optimizing the expressions
+        // to more "friendly" forms
+        z3::expr e_opt = combiner.combine(e);
+        PRE_DEBUG("Combined input: " << e_opt << "\n");
         // Assume input is in CNF
-        populate_data_structures(e);
-        z3::expr psi = create_SAT_out_of_bounds_expr(e);
+        populate_data_structures(e_opt);
+        z3::expr psi = create_SAT_out_of_bounds_expr(e_opt);
         PRE_DEBUG("psi (SATOutOfBounds): " << psi << "\n");
-        z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e);
+        z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e_opt);
         PRE_DEBUG("psi_tag (UNSATOutOfBounds): " << psi_tag << "\n");
 
         z3::expr psi_SAT = create_psi_expr(psi);
         PRE_DEBUG("psi_SAT: " << psi_SAT << "\n");
         z3::expr psi_UNSAT = create_psi_expr(psi_tag);
         PRE_DEBUG("psi_UNSAT: " << psi_UNSAT << "\n");
-        z3::expr phi_1 = drop_out_of_bounds_literals(e);
+        z3::expr phi_1 = drop_out_of_bounds_literals(e_opt);
         PRE_DEBUG("phi_1: " << phi_1 << "\n");
         z3::expr phi_2 = (phi_1 && !psi_UNSAT) || psi_SAT;
         PRE_DEBUG("phi_2: " << phi_2 << "\n");
