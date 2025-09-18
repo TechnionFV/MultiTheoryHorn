@@ -1072,15 +1072,14 @@ static int run_benchmarks_cli(int argc, char** argv) {
         bool enabled;
     };
 
-    // TODO [Omer]: Decide which benchmarks to disable
     const std::unordered_map<std::string, Benchmark> REGISTRY = {
-        {"max_bv",                      {max_bv,                        false}},
+        {"max_bv",                      {max_bv,                        true}},
         {"max_multi",                   {max_multi,                     true}},
-        {"opposite_signs_bv",           {opposite_signs_bv,             false}},
+        {"opposite_signs_bv",           {opposite_signs_bv,             true}},
         {"opposite_signs_multi",        {opposite_signs_multi,          true}},
-        {"abs_bv",                      {abs_bv,                        false}},
+        {"abs_bv",                      {abs_bv,                        true}},
         {"abs_multi",                   {abs_multi,                     true}},
-        {"cond_negate_bv",              {cond_negate_bv,                false}},
+        {"cond_negate_bv",              {cond_negate_bv,                true}},
         {"cond_negate_multi",           {cond_negate_multi,             true}},
         {"swap_bv",                     {swap_bv,                       false}},
         {"swap_multi",                  {swap_multi,                    false}},

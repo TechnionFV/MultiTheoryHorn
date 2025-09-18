@@ -5,16 +5,16 @@ set -euo pipefail
 # CONTROL THE SWEEP HERE (no CLI args; edit this section)
 # ==========================================================
 
-TIMEOUT=3600   # CPU time limit in seconds (1 hour)
+TIMEOUT=7200   # CPU time limit in seconds (2 hours)
 MEMOUT=16384   # Memory limit in MB (16 GB)
-SIZE_MIN=3
-SIZE_MAX=16
+SIZE_MIN=4
+SIZE_MAX=63
 SIZE_STEP=1
 
 # debug mode (true/false) - adds more logging
 # It is recommended to keep this false as it may clutter output files
 # and slow down the runs.
-DEBUG=false
+DEBUG=true
 
 # Use SLURM (true) or run locally (false).
 # If set to true but `sbatch` is not found, we automatically fall back to local mode.
