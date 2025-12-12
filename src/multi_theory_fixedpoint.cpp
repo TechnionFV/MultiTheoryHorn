@@ -30,6 +30,32 @@ namespace multi_theory_horn {
         return true;
     }
 
+    z3::expr MT_fixedpoint::get_refutation_leaf_pred(z3::expr const& refutation) const {
+        // The refutation is a modus ponens tree
+        // The first argument is the hyper-resolution predicate
+        z3::expr hyper_res_pred = refutation.arg(0);
+
+        // Take the query predicate
+        z3::expr q_pred = hyper_res_pred.arg(1);
+
+        // If the query predicate is a hyper-resolution predicate, we need to find the leaf
+        while (is_hyper_res(q_pred)) {
+            q_pred = q_pred.arg(1);
+        }
+
+        return q_pred;
+    }
+
+    z3::expr MT_fixedpoint::get_refutation_leaf_phi(z3::expr const& q, z3::expr_vector const& vars) const {
+        assert(vars.size() == q.num_args() && 
+               "The number of variables in the map must match the number of arguments in the query predicate");
+        z3::expr_vector conjuncts(m_ctx);
+        for (unsigned i = 0; i < vars.size(); ++i) {
+            conjuncts.push_back(vars[i] == q.arg(i));
+        }
+        return z3::mk_and(conjuncts);
+    }
+
     void MT_fixedpoint::add_predicate_fact(z3::func_decl const& key, z3::expr const& head, Theory theory) {
         z3::expr_vector vars = head.args();
         std::string fact_name_str = kAdded_fact_name + std::to_string(added_fact_counter);
@@ -73,23 +99,6 @@ namespace multi_theory_horn {
         return z3::mk_and(bound_lemmas);
     }
 
-    //==============================================================================
-    //                              PUBLIC METHODS
-    //==============================================================================
-    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess, bool simplify)
-        : m_ctx(ctx),m_fp_int(ctx), m_fp_bv(ctx),
-          m_bv_size(bv_size), m_is_signed(is_signed),
-          m_int2bv_preprocess(int2bv_preprocess), m_simplify(simplify) {
-        // Set the solvers to use spacer engines for integer and bit-vector theories.
-        z3::params p(ctx);
-        p.set("engine", "spacer");
-        p.set("fp.xform.slice", false);
-        p.set("fp.xform.inline_linear", false);
-        p.set("fp.xform.inline_eager", false);
-        m_fp_int.set(p);
-        m_fp_bv.set(p);
-    }
-
     void MT_fixedpoint::add_variable_map(z3::expr_vector bv_vars, z3::expr_vector int_vars) {
         assert(bv_vars.size() == int_vars.size() && "The size of bv_vars and int_vars must be the same");
         
@@ -113,30 +122,21 @@ namespace multi_theory_horn {
         }
     }
 
-    z3::expr MT_fixedpoint::get_refutation_leaf_pred(z3::expr const& refutation) const {
-        // The refutation is a modus ponens tree
-        // The first argument is the hyper-resolution predicate
-        z3::expr hyper_res_pred = refutation.arg(0);
-
-        // Take the query predicate
-        z3::expr q_pred = hyper_res_pred.arg(1);
-
-        // If the query predicate is a hyper-resolution predicate, we need to find the leaf
-        while (is_hyper_res(q_pred)) {
-            q_pred = q_pred.arg(1);
-        }
-
-        return q_pred;
-    }
-
-    z3::expr MT_fixedpoint::get_refutation_leaf_phi(z3::expr const& q, z3::expr_vector const& vars) const {
-        assert(vars.size() == q.num_args() && 
-               "The number of variables in the map must match the number of arguments in the query predicate");
-        z3::expr_vector conjuncts(m_ctx);
-        for (unsigned i = 0; i < vars.size(); ++i) {
-            conjuncts.push_back(vars[i] == q.arg(i));
-        }
-        return z3::mk_and(conjuncts);
+    //==============================================================================
+    //                              PUBLIC METHODS
+    //==============================================================================
+    MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess, bool simplify)
+        : m_ctx(ctx),m_fp_int(ctx), m_fp_bv(ctx),
+          m_bv_size(bv_size), m_is_signed(is_signed),
+          m_int2bv_preprocess(int2bv_preprocess), m_simplify(simplify) {
+        // Set the solvers to use spacer engines for integer and bit-vector theories.
+        z3::params p(ctx);
+        p.set("engine", "spacer");
+        p.set("fp.xform.slice", false);
+        p.set("fp.xform.inline_linear", false);
+        p.set("fp.xform.inline_eager", false);
+        m_fp_int.set(p);
+        m_fp_bv.set(p);
     }
 
     void MT_fixedpoint::add_rule(z3::expr& rule, Theory theory, z3::symbol const& name) {
