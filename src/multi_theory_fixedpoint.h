@@ -99,6 +99,9 @@ namespace multi_theory_horn {
         // Construction / destruction
         //--------------------------------------------------------------------------
         explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess = true, bool simplify = true);
+        explicit MT_fixedpoint(z3::context& ctx);
+
+        void from_solver(z3::fixedpoint& fp);
 
         //--------------------------------------------------------------------------
         // Quick access to the underlying fixedpoint engine

@@ -139,6 +139,16 @@ namespace multi_theory_horn {
         m_fp_bv.set(p);
     }
 
+    MT_fixedpoint::MT_fixedpoint(z3::context& ctx)
+        : MT_fixedpoint(ctx, false, 4, true, true) {
+        // TODO: In the future, only initialize the context.
+        // TODO: The rest of the class fields will be inferred automatically.
+    }
+
+    void MT_fixedpoint::from_solver(z3::fixedpoint& fp) {
+        NOT_IMPLEMENTED();
+    }
+
     void MT_fixedpoint::add_rule(z3::expr& rule, Theory theory, z3::symbol const& name) {
         switch (theory) {
             case Theory::IAUF:
