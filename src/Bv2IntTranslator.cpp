@@ -4,13 +4,15 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, unsigned bv_size, bool simplify, const VarMap& bv2int_var_map): 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, unsigned bv_size, 
+                                       bool simplify, bool no_overflow, const VarMap& bv2int_var_map): 
         ctx(c),
         m_is_signed(is_signed),
-        m_simplify(simplify),
         m_bv_size(bv_size),
-        m_vars(c),
-        m_bv2int_var_map(bv2int_var_map)
+        m_simplify(simplify),
+        m_no_overflow(no_overflow),
+        m_bv2int_var_map(bv2int_var_map),
+        m_vars(c)
     {}
 
     void Bv2IntTranslator::reset() {
@@ -44,6 +46,52 @@ namespace multi_theory_horn {
     }
 
     z3::expr Bv2IntTranslator::translate(const z3::expr& e) {
+        if (m_no_overflow)
+            return translate_no_overflow(e);
+        return translate_overflow(e);
+    }
+
+    z3::expr Bv2IntTranslator::translate_no_overflow(const z3::expr& e) {
+        Z3_ast key = e; // implicit cast to Z3_ast
+        auto it = m_translate.find(key);
+        // This condition is important, it prevents redundant work
+        if (it != m_translate.end()) 
+            return it->second;
+
+        z3::expr r(ctx);    
+        if (e.is_quantifier()) {
+            // In case of horn clauses, this shouldn't be reached
+            // This should be unrecahable as quantifiers should not be present
+            // in the CHC BV expressions.
+            UNREACHABLE();
+        }
+        else if (e.is_var()) {
+            // This should be unreachable as we declare variables
+            // as constants (0-arity apps)
+            UNREACHABLE();
+        }
+        else {
+            // is_app
+            if (is_const_variable(e)) {
+                r = translate_const_variable(e);
+            }
+            else if (is_basic(e)) {
+                r = translate_basic(e);
+            }
+            else {
+                // is bv
+                r = translate_bv_no_overflow(e);
+            }
+        }
+
+        // Simplify the result expression
+        if (m_simplify)
+            r = r.simplify();
+        m_translate.emplace(key, r);
+        return r;
+    }
+
+    z3::expr Bv2IntTranslator::translate_overflow(const z3::expr& e) {
         Z3_ast key = e; // implicit cast to Z3_ast
         auto it = m_translate.find(key);
         // This condition is important, it prevents redundant work
@@ -64,25 +112,7 @@ namespace multi_theory_horn {
         }
         else { // is_app
             if (is_const_variable(e)) {
-                // Note: numerals are handled in translate_bv: Z3_OP_BNUM
-                // Constants are apps with no arguments
-                std::string name = e.decl().name().str();
-                if (m_bv2int_var_map.find(e.decl()) != m_bv2int_var_map.end()) {
-                    // If we have a mapping for this constant, use it
-                    r = m_bv2int_var_map.at(e.decl());
-                } else {
-                    // Otherwise, create a new integer constant
-                    r = ctx.int_const(name.c_str());
-                }
-
-                // We only support constants (vars) of Bit-vector sort!
-                assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
-                unsigned k = e.get_sort().bv_size();
-                create_bound_lemma(r, k);
-                m_vars.push_back(r);
-
-                if (m_is_signed)
-                    r = stu(r, e.get_sort().bv_size());
+                r = translate_const_variable(e);
             }
             else if (is_special_basic(e)) {
                 // Handle special basic cases: ite and eq
@@ -90,6 +120,7 @@ namespace multi_theory_horn {
             }
             else if (is_basic(e)) {
                 // && || implies iff, etc..
+                assert(!is_special_basic(e) && "Expected a basic expression (not ite or equality)");
                 r = translate_basic(e);
             }
             else if (is_bv_relation(e)){
@@ -108,6 +139,91 @@ namespace multi_theory_horn {
         if (m_simplify)
             r = r.simplify();
         m_translate.emplace(key, r);
+        return r;
+    }
+
+    z3::expr Bv2IntTranslator::translate_bv_no_overflow(const z3::expr& e) {
+        // Get BV operation kind
+        Z3_decl_kind f = e.decl().decl_kind();
+
+        // Collect arguments
+        std::vector<z3::expr> args;
+        for (unsigned i = 0; i < e.num_args(); ++i)
+            args.push_back(translate(e.arg(i)));
+
+        // Result expression
+        z3::expr r(ctx);
+        unsigned k;
+        uint64_t N;
+        switch (f) {
+            case Z3_OP_BNUM: {
+                assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
+                uint64_t raw = e.get_numeral_uint64();
+                if (m_is_signed) {
+                    int64_t raw_int = sign_extend(raw, e.get_sort().bv_size());
+                    return ctx.int_val(raw_int);
+                }
+                return ctx.int_val(raw);
+            }
+            // Relational operations
+            case Z3_OP_SLEQ:
+            case Z3_OP_ULEQ:
+                r = args[0] <= args[1];
+                break;
+            case Z3_OP_SGEQ:
+            case Z3_OP_UGEQ:
+                r = args[0] >= args[1];
+                break;
+            case Z3_OP_SLT:
+            case Z3_OP_ULT:
+                r = args[0] < args[1];
+                break;
+            case Z3_OP_SGT:
+            case Z3_OP_UGT:
+                r = args[0] > args[1];
+                break;
+            // Arithmetic operations
+            case Z3_OP_BNEG:
+                r = -args[0];
+                break;
+            case Z3_OP_BADD:
+                r = args[0] + args[1];
+                break;
+            case Z3_OP_BSUB:
+                r = args[0] - args[1];
+                break;
+            case Z3_OP_BMUL:
+                r = args[0] * args[1];
+                break;
+
+            case Z3_OP_BSDIV:
+            case Z3_OP_BSDIV_I:
+                r = if_eq(args[1], 0, ctx.int_val(-1), args[0] / args[1]);
+                break;
+            case Z3_OP_BUDIV:
+            case Z3_OP_BUDIV_I:
+                k = e.arg(1).get_sort().bv_size();
+                N = (uint64_t)1 << k;
+                r = if_eq(args[1], 0, ctx.int_val(N - 1), args[0] / args[1]);
+                break;
+            case Z3_OP_BSMOD:
+            case Z3_OP_BSMOD_I:
+            case Z3_OP_BUREM:
+            case Z3_OP_BUREM_I:
+                r = if_eq(args[1], 0, args[0], args[0] % args[1]);
+                break;
+
+            // Extra cases
+            case Z3_OP_BSREM:
+            case Z3_OP_BSREM_I:
+                k = e.arg(1).get_sort().bv_size();
+                r = if_eq(args[1], 0, args[0], rem(args[0], args[1]));
+                break;
+            
+            default:
+                ASSERT_FALSE("Unsupported BV op with no overflow guarantee");
+        }
+
         return r;
     }
 
@@ -267,6 +383,32 @@ namespace multi_theory_horn {
         return r;
     }
 
+    z3::expr Bv2IntTranslator::translate_const_variable(const z3::expr& e) {
+        // Note: numerals are handled in translate_bv: Z3_OP_BNUM
+        // Constants are apps with no arguments
+        std::string name = e.decl().name().str();
+        z3::expr r(ctx);
+        if (m_bv2int_var_map.find(e.decl()) != m_bv2int_var_map.end()) {
+            // If we have a mapping for this constant, use it
+            r = m_bv2int_var_map.at(e.decl());
+        } else {
+            // Otherwise, create a new integer constant
+            r = ctx.int_const(name.c_str());
+        }
+
+        // We only support constants (vars) of Bit-vector sort!
+        assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
+        unsigned k = e.get_sort().bv_size();
+        create_bound_lemma(r, k);
+        m_vars.push_back(r);
+
+        // We only perform stu if the translation is signed and overflow is possible
+        if (!m_no_overflow && m_is_signed)
+            r = stu(r, e.get_sort().bv_size());
+
+        return r;
+    }
+
     z3::expr Bv2IntTranslator::translate_cast(const z3::expr& e) {
         assert(is_casting(e) && "Expected a casting operation (bv2int or int2bv)");
         Z3_decl_kind f = e.decl().decl_kind();
@@ -358,7 +500,6 @@ namespace multi_theory_horn {
     }
 
     z3::expr Bv2IntTranslator::translate_basic(const z3::expr& e) {
-        assert(!is_special_basic(e) && "Expected a basic expression (not ite or equality)");
         z3::expr_vector new_args(ctx);
         for (unsigned i = 0; i < e.num_args(); ++i) {
             new_args.push_back(translate(e.arg(i)));

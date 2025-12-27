@@ -19,6 +19,7 @@ namespace multi_theory_horn {
         unsigned          m_bv_size; // Size of the bit-vector expressions
         bool              m_is_signed; // Whether to treat bit-vectors as signed or unsigned
         bool              m_simplify; // Whether to simplify the translated expressions
+        bool              m_no_overflow; // Whether to consider overflow cases
 
         // Map each original BV expr AST to its translated Int expr
         // This is used to cache results of translations
@@ -30,6 +31,8 @@ namespace multi_theory_horn {
         VarMap m_bv2int_var_map;
 
         // A set of lemmas specfiying the bounds on the new variables
+        // TODO: Generalize m_lemmas to be a map so we could get the bounds of
+        // each variable separately more easily.
         std::vector<z3::expr> m_lemmas;
 
         z3::expr bseli(const z3::expr& e, unsigned i);
@@ -55,7 +58,14 @@ namespace multi_theory_horn {
         z3::expr translate_bv_rel(const z3::expr& e);
         z3::expr translate_basic(const z3::expr& e);
         z3::expr translate_special_basic(const z3::expr& e);
-        
+        z3::expr translate_const_variable(const z3::expr& e);
+        // General translation routine, where we no overflow is not guaranteed
+        z3::expr translate_overflow(const z3::expr& e);
+
+        // General translation routine, where no overflow is guaranteed
+        z3::expr translate_no_overflow(const z3::expr& e);
+        z3::expr translate_bv_no_overflow(const z3::expr& e);
+
         z3::expr create_bitwise_sum(const Z3_decl_kind& f, const z3::expr& arg1, const z3::expr& arg2, unsigned k);
         void create_bound_lemma(z3::expr& var, unsigned k);
 
@@ -70,6 +80,7 @@ namespace multi_theory_horn {
     public:
         explicit Bv2IntTranslator(z3::context& c, bool is_signed,
                                   unsigned bv_size, bool simplify = true,
+                                  bool no_overflow = false,
                                   const VarMap& bv2int_var_map = VarMap());
         void reset();
 
