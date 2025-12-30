@@ -30,10 +30,9 @@ namespace multi_theory_horn {
         // in the expressions given through the translate method
         VarMap m_bv2int_var_map;
 
-        // A set of lemmas specfiying the bounds on the new variables
-        // TODO: Generalize m_lemmas to be a map so we could get the bounds of
-        // each variable separately more easily.
-        std::vector<z3::expr> m_lemmas;
+        // A set of lemmas specifying the bounds on variables
+        using VarLemmaMap = std::unordered_map<Z3_ast, z3::expr, AstHash, AstEq>;
+        VarLemmaMap m_lemmas;
 
         z3::expr bseli(const z3::expr& e, unsigned i);
         z3::expr umod(const z3::expr& e, unsigned k);
@@ -89,6 +88,6 @@ namespace multi_theory_horn {
 
         // Accessors for the collected vars and lemmas
         z3::expr_vector vars() const   { return m_vars; }
-        const std::vector<z3::expr>& lemmas() const { return m_lemmas; }
+        const VarLemmaMap& lemmas() const { return m_lemmas; }
     };
 } // namespace multi_theory_horn

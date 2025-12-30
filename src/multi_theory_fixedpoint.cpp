@@ -288,8 +288,8 @@ namespace multi_theory_horn {
                         z3::expr int_p_interp = bv2int_t.translate(p_interp);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
                         z3::expr_vector lemmas(m_ctx);
-                        for (const z3::expr& lemma : bv2int_t.lemmas()) {
-                            lemmas.push_back(lemma);
+                        for (const auto& kv : bv2int_t.lemmas()) {
+                            lemmas.push_back(kv.second);
                         }
                         int_p_interp = int_p_interp && z3::mk_and(lemmas);
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
@@ -388,8 +388,8 @@ namespace multi_theory_horn {
                         z3::expr phi_trans = bv2int_t.translate(phi);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
                         z3::expr_vector lemmas(m_ctx);
-                        for (const z3::expr& lemma : bv2int_t.lemmas()) {
-                            lemmas.push_back(lemma);
+                        for (const auto& kv : bv2int_t.lemmas()) {
+                            lemmas.push_back(kv.second);
                         }
                         phi_trans = (phi_trans) && z3::mk_and(lemmas);
                         DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);

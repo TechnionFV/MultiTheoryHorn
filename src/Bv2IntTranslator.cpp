@@ -575,13 +575,13 @@ namespace multi_theory_horn {
         if (m_is_signed) {
             int64_t N = (int64_t)1 << (k - 1);
             z3::expr lemma = (var >= ctx.int_val(-N)) && (var < ctx.int_val(N));
-            m_lemmas.push_back(lemma);
+            m_lemmas.emplace(var, lemma);
             return;
         }
 
         int64_t N = (uint64_t)1 << k;
         z3::expr lemma = (var >= ctx.int_val(0)) && (var < ctx.int_val(N));
-        m_lemmas.push_back(lemma);
+        m_lemmas.emplace(var, lemma);
     }
 
     z3::expr Bv2IntTranslator::bseli(const z3::expr& e, unsigned i) {
