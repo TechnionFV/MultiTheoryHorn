@@ -42,8 +42,9 @@ params get_bv_params(context& c) {
     return param;
 }
 
-// ===================== [max_bv] =====================
-check_result max_bv_base(unsigned int size, bool is_sat) {
+// ========================= [max-inv] =========================
+// unsigned benchmark
+check_result max_inv(unsigned int size, bool is_multi) {
     context c;
     fixedpoint fp(c);
 
@@ -52,11 +53,12 @@ check_result max_bv_base(unsigned int size, bool is_sat) {
     sort bool_sort = c.bool_sort();
 
     // Declare relations
-    // func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
     func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
 
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
+    fp.register_relation(q);
 
     params param = get_bv_params(c);
     fp.set(param);
@@ -85,23 +87,36 @@ check_result max_bv_base(unsigned int size, bool is_sat) {
     symbol name2 = c.str_symbol("rule2");
     fp.add_rule(rule2, name2);
 
-    // p(y,z,a,i), !(i < z), !(a == max(a,y)) --> false
+    // p(y,z,a,i), !(i < z) --> q(y,a)
+    expr rule3 = forall(vars, implies(p(y, z, a, i) && !ult(i, z), q(y, a)));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a), !(a == max(a,y)) --> false
+    expr_vector query_vars(c);
+    query_vars.push_back(y);
+    query_vars.push_back(a);
+    expr query_pred = q(y, a); 
     expr bad_phi = !(a == (a ^ ((a ^ y) & ite(ult(a, y), c.bv_val(-1, size), c.bv_val(0, size)))));
-    if (!is_sat) {
-        // p(y,z,a,i), !(i < z), (a == max(a,y)) --> false
-        bad_phi = !bad_phi;
+
+    check_result result = check_result::unknown;
+
+    if (is_multi) {
+        MT_fixedpoint mtfp(c, /* is_signed= */ false, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
     }
-    expr query = exists(vars, p(y, z, a, i) && !ult(i, z) && bad_phi);
-    check_result result = fp.query(query);
 
     return result;
 }
-check_result max_bv(unsigned int size) { return max_bv_base(size, /*is_sat=*/true); }
-check_result max_bv_unsat(unsigned int size) { return max_bv_base(size, /*is_sat=*/false); }
-// ===================== [max_bv] =====================
+// ========================= [max-inv] =========================
 
-// ===================== [opposite_signs_bv] =====================
-check_result opposite_signs_bv_base(unsigned int size, bool is_sat) {
+// ====================== [opposite-signs] =====================
+// signed benchmark
+check_result opposite_signs(unsigned int size, bool is_multi) {
     context c;
     fixedpoint fp(c);
 
@@ -111,9 +126,11 @@ check_result opposite_signs_bv_base(unsigned int size, bool is_sat) {
 
     // Declare relations
     func_decl p = function("p", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
 
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
+    fp.register_relation(q);
 
     params param = get_bv_params(c);
     fp.set(param);
@@ -135,28 +152,40 @@ check_result opposite_signs_bv_base(unsigned int size, bool is_sat) {
     fp.add_rule(rule1, name1);
 
     // p(x,a,b), a < x --> p(x,a + 1,b - 1)
-    expr rule2 = forall(vars, implies(p(x, a, b) && (a < x), p(x, a + 1, b - 1)));      
+    expr rule2 = forall(vars, implies(p(x, a, b) && (a < x), p(x, a + c.bv_val(1, size), b - c.bv_val(1, size))));
     symbol name2 = c.str_symbol("rule2");
     fp.add_rule(rule2, name2);
 
-    // p(x,a,b), !(a < x), !(a,b have opposite signs) --> false
+    // p(x,a,b), !(a < x) --> q(a,b)
+    expr rule3 = forall(vars, implies(p(x, a, b) && !(a < x), q(a, b)));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(a,b), !(a,b have opposite signs) --> false
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    expr query_pred = q(a, b);
     expr bad_phi = !((a ^ b) < 0);
-    if (!is_sat) {
-        // p(x,a,b), !(a < x), (a,b have opposite signs) --> false
-        bad_phi = !bad_phi;
+    
+    check_result result = check_result::unknown;
+
+    if (is_multi) {
+        MT_fixedpoint mtfp(c, /* is_signed= */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
     }
-    expr query = exists(vars, p(x, a, b) && !(a < x) && bad_phi);        
-    check_result result = fp.query(query);
 
     return result;
 }
+// ====================== [opposite-signs] =====================
 
-check_result opposite_signs_bv(unsigned int size) { return opposite_signs_bv_base(size, /*is_sat=*/true); }
-check_result opposite_signs_bv_unsat(unsigned int size) { return opposite_signs_bv_base(size, /*is_sat=*/false); }
-// ===================== [opposite_signs_bv] =====================
-
-// ===================== [abs_bv] =====================
-check_result abs_bv_base(unsigned int size, bool is_sat) {
+// ========================== [abs-ge] =========================
+// signed benchmark
+check_result abs_ge(unsigned int size, bool is_multi) {
     context c;
     fixedpoint fp(c);
 
@@ -166,9 +195,11 @@ check_result abs_bv_base(unsigned int size, bool is_sat) {
 
     // Declare relations
     func_decl p = function("p", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
 
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
+    fp.register_relation(q);
 
     params param = get_bv_params(c);
     fp.set(param);
@@ -178,36 +209,53 @@ check_result abs_bv_base(unsigned int size, bool is_sat) {
     expr y = c.bv_const("y", size);
     expr i = c.bv_const("i", size);
 
+    expr_vector vars(c);
+    vars.push_back(x);
+    vars.push_back(y);
+    vars.push_back(i);
+
     // Rules
-    // x != 2^(k-1), y == |x| --> p(x,y,0)
-    uint64_t min_bv = (uint64_t)1 << (size - 1);
-    expr rule1 = forall(x, y, implies((x != c.bv_val(min_bv,size)) && (y == (c.bv_val(1,size) | ite(x >= 0, c.bv_val(0, size), c.bv_val(-1, size))) * x), p(x, y, c.bv_val(0, size))));     
+    // x != -2^(k-1), y == |x| --> p(x,y,0)
+    expr min_val = shl(c.bv_val(1,size), c.bv_val(size - 1,size));
+    expr rule1 = forall(x, y, implies((x != min_val) && (y == (c.bv_val(1,size) | ite(x >= 0, c.bv_val(0, size), c.bv_val(-1, size))) * x), p(x, y, c.bv_val(0, size))));     
     symbol name1 = c.str_symbol("rule1");
     fp.add_rule(rule1, name1);
 
     // p(x,y,i), i < y --> p(x,y,i + 1)
-    expr rule2 = forall(x, y, i, implies(p(x, y, i) && (i < y), p(x, y, i + 1)));      
+    expr rule2 = forall(vars, implies(p(x, y, i) && (i < y), p(x, y, i + c.bv_val(1, size))));      
     symbol name2 = c.str_symbol("rule2");
     fp.add_rule(rule2, name2);
 
-    // p(x,y,i), !(i < y), !(x <= i) --> false
+    // p(x,y,i), !(i < y) --> q(x,i)
+    expr rule3 = forall(vars, implies(p(x, y, i) && !(i < y), q(x, i)));      
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(x,i), !(x <= i) --> false
+    expr_vector query_vars(c);
+    query_vars.push_back(x);
+    query_vars.push_back(i);
+    expr query_pred = q(x, i); 
     expr bad_phi = !(x <= i);
-    if (!is_sat) {
-        // p(x,y,i), !(i < y), (x <= i) --> false
-        bad_phi = !bad_phi;
+
+    check_result result = check_result::unknown;
+
+    if (is_multi) {
+        MT_fixedpoint mtfp(c, /* is_signed= */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
     }
-    expr query = exists(x, y, i, p(x, y, i) && !(i < y) && bad_phi);
-    check_result result = fp.query(query);
 
     return result;
 }
+// ========================== [abs-ge] =========================
 
-check_result abs_bv(unsigned int size) { return abs_bv_base(size, /*is_sat=*/true); }
-check_result abs_bv_unsat(unsigned int size) { return abs_bv_base(size, /*is_sat=*/false); }
-// ===================== [abs_bv] =====================
-
-// ===================== [cond_negate_bv] =====================
-check_result cond_negate_bv_base(unsigned int size, bool is_sat) {
+// ======================== [cond-negate] ======================
+// signed benchmark
+check_result cond_negate(unsigned int size, bool is_multi) {
     context c;
     fixedpoint fp(c);
 
@@ -217,9 +265,11 @@ check_result cond_negate_bv_base(unsigned int size, bool is_sat) {
 
     // Declare relations
     func_decl p = function("p", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
 
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
+    fp.register_relation(q);
 
     params param = get_bv_params(c);
     fp.set(param);
@@ -241,21 +291,33 @@ check_result cond_negate_bv_base(unsigned int size, bool is_sat) {
     symbol name2 = c.str_symbol("rule2");
     fp.add_rule(rule2, name2);
 
-    // p(x,y,i), !(i < y), b == ite(i <= x,1,0), !((x ^ (-b)) + b == -x) --> false
-    expr bad_phi = !(((x ^ (-b)) + b) == -x);
-    if (!is_sat) {
-        // p(x,y,i), !(i < y), b == ite(i <= x,1,0), ((x ^ (-b)) + b == -x) --> false
-        bad_phi = !bad_phi;
+    // p(x,y,i), !(i < y) --> q(x,i)
+    expr rule3 = forall(x, y, i, implies(p(x, y, i) && !(i < y), q(x, i)));      
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(x,i), b == ite(i <= x,1,0), !((x ^ (-b)) + b == -x) --> false
+    expr_vector query_vars(c);
+    query_vars.push_back(x);
+    query_vars.push_back(i);
+    query_vars.push_back(b);
+    expr query_pred = q(x, i);
+    expr bad_phi = (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && !(((x ^ (-b)) + b) == -x);
+
+    check_result result = check_result::unknown;
+
+    if (is_multi) {
+        MT_fixedpoint mtfp(c, /* is_signed= */ true, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
     }
-    expr query = exists(x, y, i, b, p(x, y, i) && !(i < y) && (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && bad_phi);
-    check_result result = fp.query(query);
 
     return result;
 }
-
-check_result cond_negate_bv(unsigned int size) { return cond_negate_bv_base(size, /*is_sat=*/true); }
-check_result cond_negate_bv_unsat(unsigned int size) { return cond_negate_bv_base(size, /*is_sat=*/false); }
-// ===================== [cond_negate_bv] =====================
+// ======================== [cond-negate] ======================
 
 // ===================== [swap_bv] =====================
 check_result swap_bv_base(unsigned int size, bool is_sat) {
@@ -494,6 +556,7 @@ static void print_help() {
         "Options:\n"
         "  --bench <name>   Benchmark to run (see --list)\n"
         "  --size  <k>      Bit-vector size (unsigned integer > 0)\n"
+        "  --multi          Use the underlying multi-theory solver"
         "  --list           Print enabled benchmarks\n"
         "  --help           Show this help\n"
         "  --quiet          Don't print anything\n"
@@ -505,30 +568,26 @@ static void print_help() {
 }
 
 static int run_benchmarks_cli(int argc, char** argv) {
-    using BenchFn = std::function<check_result(unsigned int)>;
+    using BenchFn = std::function<check_result(unsigned int,bool)>;
     struct Benchmark {
         BenchFn fn;
         bool enabled;
     };
 
     const std::unordered_map<std::string, Benchmark> REGISTRY = {
-        {"max_bv",                      {max_bv,                        true}},
-        {"opposite_signs_bv",           {opposite_signs_bv,             true}},
-        {"abs_bv",                      {abs_bv,                        true}},
-        {"cond_negate_bv",              {cond_negate_bv,                true}},
-        {"swap_bv",                     {swap_bv,                       false}},
-        {"swap2_bv",                    {swap2_bv,                      false}},
-        {"max_bv_unsat",                {max_bv_unsat,                  false}},
-        {"opposite_signs_bv_unsat",     {opposite_signs_bv_unsat,       false}},
-        {"abs_bv_unsat",                {abs_bv_unsat,                  false}},
-        {"cond_negate_bv_unsat",        {cond_negate_bv_unsat,          false}},
-        {"swap_bv_unsat",               {swap_bv_unsat,                 false}},
-        {"swap2_bv_unsat",              {swap2_bv_unsat,                false}},
+        {"max-inv",                     {max_inv,                       true}},
+        {"opposite-signs",              {opposite_signs,                true}},
+        {"abs-ge",                      {abs_ge,                        true}},
+        {"cond-negate",                 {cond_negate,                   true}},
+        //{"swap_bv",                     {swap_bv,                       false}},
+        //{"swap2_bv",                    {swap2_bv,                      false}},
+        //{"swap_bv_unsat",               {swap_bv_unsat,                 false}},
+        //{"swap2_bv_unsat",              {swap2_bv_unsat,                false}},
     };
 
     std::string bench = "";
     unsigned int size = 0;
-    bool quiet = false, brunch = false;
+    bool quiet = false, brunch = false, multi = false;
     std::string output_path;
 
     // Parse args
@@ -566,6 +625,8 @@ static int run_benchmarks_cli(int argc, char** argv) {
         } else if (std::strcmp(argv[i], "--debug") == 0) {
             // hidden dev option
             set_mtfp_debug(true);
+        } else if (std::strcmp(argv[i], "--multi") == 0) {
+            multi = true;
         } else {
             OUT() << "error: unknown or malformed argument: " << argv[i] << "\n";
             return EXIT_ERROR;
@@ -603,7 +664,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
     int exit_code = EXIT_ERROR;
     try {
         // Call the benchmark
-        check_result r = it->second.fn(size);
+        check_result r = it->second.fn(size, multi);
         auto [result_str, code] = result_to_string_and_code(r);
         exit_code = code;
 

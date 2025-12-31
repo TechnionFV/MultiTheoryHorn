@@ -200,6 +200,10 @@ namespace multi_theory_horn {
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
+    z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi) {
+        NOT_IMPLEMENTED();
+    }
+
     z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory) {
         struct QueryConfig {
             z3::expr_vector vars; // The variables in the query
