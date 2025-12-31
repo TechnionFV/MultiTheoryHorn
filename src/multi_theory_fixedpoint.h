@@ -122,6 +122,12 @@ namespace multi_theory_horn {
         z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory);
 
         //--------------------------------------------------------------------------
+        // Updated query declaration
+        //--------------------------------------------------------------------------
+        // The theory of the query is determined internally, so no explicit theory parameter is required. 
+        z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi);
+
+        //--------------------------------------------------------------------------
         // Forwarding of fixepoint most common calles
         //--------------------------------------------------------------------------
         
