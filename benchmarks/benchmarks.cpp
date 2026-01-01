@@ -319,129 +319,9 @@ check_result cond_negate(unsigned int size, bool is_multi) {
 }
 // ======================== [cond-negate] ======================
 
-// ===================== [swap_bv] =====================
-check_result swap_bv_base(unsigned int size, bool is_sat) {
-    context c;
-    fixedpoint fp(c);
-
-    // Declare sorts
-    sort bv_sort = c.bv_sort(size);
-    sort bool_sort = c.bool_sort();
-
-    // Declare relations
-    func_decl p0 = function("p0", bv_sort, bv_sort, bv_sort, bool_sort);
-    func_decl p1 = function("p1", bv_sort, bv_sort, bv_sort, bool_sort);
-    func_decl p2 = function("p2", bv_sort, bv_sort, bv_sort, bool_sort);
-    func_decl p3 = function("p3", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
-    func_decl p4 = function("p4", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
-
-    // Register them with the fixedpoint engine (required)
-    fp.register_relation(p0);
-    fp.register_relation(p1);
-    fp.register_relation(p2);
-    fp.register_relation(p3);
-    fp.register_relation(p4);
-
-    // Set engine to Spacer explicitly (optional — it's the default)
-    params param(c);
-    param.set("engine", "spacer");
-    fp.set(param);
-
-    // Variables
-    expr x = c.bv_const("x", size);
-    expr x1 = c.bv_const("x1", size);
-    expr x2 = c.bv_const("x2", size);
-    expr y = c.bv_const("y", size);
-    expr y1 = c.bv_const("y1", size);
-    expr y2 = c.bv_const("y2", size);
-    expr z = c.bv_const("z", size);
-    expr z1 = c.bv_const("z1", size);
-    expr a = c.bv_const("a", size);
-    expr b = c.bv_const("b", size);
-
-    // Rules
-    // x != y, y != z, x != z --> p0(x,y,z)
-    expr rule1 = forall(x, y, z, implies(x != y && y != z && x != z, p0(x, y, z)));
-    symbol name1 = c.str_symbol("rule1");
-    fp.add_rule(rule1, name1);
-
-    // p0(x,y,z), x > y, x1 == x ^ y, y1 == y ^ x1, x2 == x1 ^ y1 --> p1(x2,y1,z)
-    expr_vector vars2(c);
-    vars2.push_back(x);
-    vars2.push_back(y);
-    vars2.push_back(z);
-    vars2.push_back(x1);
-    vars2.push_back(x2);
-    vars2.push_back(y1);
-    expr rule2 = forall(vars2, implies(p0(x, y, z) && ugt(x, y) && (x1 == (x ^ y)) && (y1 == (y ^ x1)) && (x2 == (x1 ^ y1)), p1(x2, y1, z)));
-    symbol name2 = c.str_symbol("rule2");
-    fp.add_rule(rule2, name2);
-
-    // p0(x,y,z), !(x > y) --> p1(x,y,z)
-    expr rule3 = forall(x, y, z, implies(p0(x, y, z) && !ugt(x, y), p1(x, y, z)));
-    symbol name3 = c.str_symbol("rule3");
-    fp.add_rule(rule3, name3);
-
-    // p1(x,y,z), y > z, y1 == y ^ z, z1 == z ^ y1, y2 == y1 ^ z1 --> p2(x,y2,z1)
-    expr_vector vars4(c);
-    vars4.push_back(x);
-    vars4.push_back(y);
-    vars4.push_back(z);
-    vars4.push_back(y1);
-    vars4.push_back(y2);
-    vars4.push_back(z1);
-    expr rule4 = forall(vars4, implies(p1(x, y, z) && ugt(y, z) && (y1 == (y ^ z)) && (z1 == (z ^ y1)) && (y2 == (y1 ^ z1)), p2(x, y2, z1)));
-    symbol name4 = c.str_symbol("rule4");
-    fp.add_rule(rule4, name4);
-
-    // p1(x, y, z), !(y > z) --> p2(x, y, z)
-    expr rule5 = forall(x, y, z, implies(p1(x, y, z) && !ugt(y, z), p2(x, y, z)));
-    symbol name5 = c.str_symbol("rule5");
-    fp.add_rule(rule5, name5);
-
-    // p2(x,y,z), x > y, x1 == x ^ y, y1 == y ^ x1, x2 == x1 ^ y1 --> p3(x2,y1,z,0)
-    expr rule6 = forall(vars2, implies(p2(x, y, z) && ugt(x, y) && (x1 == (x ^ y)) && (y1 == (y ^ x1)) && (x2 == (x1 ^ y1)), p3(x2, y1, z, c.bv_val(0, size))));
-    symbol name6 = c.str_symbol("rule6");
-    fp.add_rule(rule6, name6);
-
-    // p2(x,y,z), !(x > y) --> p3(x,y,z,0)
-    expr rule7 = forall(x, y, z, implies(p2(x, y, z) && !ugt(x, y), p3(x, y, z, c.bv_val(0, size))));
-    symbol name7 = c.str_symbol("rule7");
-    fp.add_rule(rule7, name7);
-
-    // p3(x,y,z,a), a < y - x --> p3(x,y,z,a+1) 
-    expr rule8 = forall(x, y, z, a, implies(p3(x, y, z, a) && ult(a, y - x), p3(x, y, z, a + 1)));
-    symbol name8 = c.str_symbol("rule8");
-    fp.add_rule(rule8, name8);
-
-    // p3(x,y,z,a), !(a < y - x) --> p4(x,z,a,0) 
-    expr rule9 = forall(x, y, z, a, implies(p3(x, y, z, a) && !ult(a, y - x), p4(x, z, a, c.bv_val(0,size))));
-    symbol name9 = c.str_symbol("rule9");
-    fp.add_rule(rule9, name9);
-
-    // p4(x,z,a,b), b < z - x --> p4(x,z,a,b+1) 
-    expr rule10 = forall(x, z, a, b, implies(p4(x, z, a, b) && ult(b, z - x), p4(x, z, a, b + 1)));
-    symbol name10 = c.str_symbol("rule10");
-    fp.add_rule(rule10, name10);
-
-    // p4(x,z,a,b), !(b < z - x), !(a < b) --> false
-    expr bad_phi = !(ult(a, b));
-    if (!is_sat) {
-        // p4(x,z,a,b), !(b < z - x), (a < b) --> false
-        bad_phi = !bad_phi;
-    }
-    expr query = exists(x, z, a, b, p4(x, z, a, b) && !ult(b, z - x) && bad_phi);
-    check_result result = fp.query(query);
-
-    return result;
-}
-
-check_result swap_bv(unsigned int size) { return swap_bv_base(size, /*is_sat=*/true); }
-check_result swap_bv_unsat(unsigned int size) { return swap_bv_base(size, /*is_sat=*/false); }
-// ===================== [swap_bv] =====================
-
-// ===================== [swap2_bv] =====================
-check_result swap2_bv_base(unsigned int size, bool is_sat) {
+// =========================== [swap] ==========================
+// unsigned benchmark
+check_result swap(unsigned int size, bool is_multi) {
     context c;
     fixedpoint fp(c);
 
@@ -452,18 +332,12 @@ check_result swap2_bv_base(unsigned int size, bool is_sat) {
     // Declare relations
     func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
     func_decl q = function("q", bv_sort, bv_sort, bv_sort, bool_sort);
-    func_decl r0 = function("r0", bv_sort, bv_sort, bool_sort);
-    func_decl r1 = function("r1", bv_sort, bv_sort, bool_sort);
-    func_decl r2 = function("r2", bv_sort, bv_sort, bool_sort);
-    func_decl r3 = function("r3", bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
 
     // Register them with the fixedpoint engine (required)
     fp.register_relation(p);
     fp.register_relation(q);
-    fp.register_relation(r0);
-    fp.register_relation(r1);
-    fp.register_relation(r2);
-    fp.register_relation(r3);
+    fp.register_relation(r);
 
     params param = get_bv_params(c);
     fp.set(param);
@@ -473,6 +347,8 @@ check_result swap2_bv_base(unsigned int size, bool is_sat) {
     expr y = c.bv_const("y", size);
     expr a = c.bv_const("a", size);
     expr b = c.bv_const("b", size);
+    expr a1 = c.bv_const("a1", size);
+    expr b1 = c.bv_const("b1", size);
 
     // Rules
     // ugt(x,y), ugt(y,0) --> p(x,y,0,0)
@@ -495,39 +371,35 @@ check_result swap2_bv_base(unsigned int size, bool is_sat) {
     symbol name4 = c.str_symbol("rule4");
     fp.add_rule(rule4, name4);
 
-    // q(x,a,b), !ult(a,x) --> r0(a,b)
-    expr rule5 = forall(x, a, b, implies(q(x, a, b) && !ult(a, x), r0(a, b)));
+    // q(x,a,b), !ult(a,x) --> r(a,b)
+    expr rule5 = forall(x, a, b, implies(q(x, a, b) && !ult(a, x), r(a, b)));
     symbol name5 = c.str_symbol("rule5");
     fp.add_rule(rule5, name5);
 
-    // r0(a,b) --> r1(a^b,b)
-    expr rule6 = forall(a, b, implies(r0(a, b), r1(a ^ b, b)));
-    symbol name6 = c.str_symbol("rule6");
-    fp.add_rule(rule6, name6);
+    // r(a,b), a1 = a ^ b, b1 = b ^ a1, !ult(a1^b1, b1) --> false 
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    query_vars.push_back(a1);
+    query_vars.push_back(b1);
+    expr query_pred = r(a, b);
+    //expr bad_phi = ((a1 == a ^ b) && (b1 == b ^ a1) && !ult(a1 ^ b1, b1));
+    expr bad_phi = (a1 == (a ^ b)) && (b1 == (b ^ a1)) && !ult((a1 ^ b1), b1);
 
-    // r1(a,b) --> r2(a,b^a)
-    expr rule7 = forall(a, b, implies(r1(a, b), r2(a, b ^ a)));
-    symbol name7 = c.str_symbol("rule7");
-    fp.add_rule(rule7, name7);
+    check_result result = check_result::unknown;
 
-    // r2(a,b) --> r3(a^b,b)
-    expr rule8 = forall(a, b, implies(r2(a, b), r3(a ^ b, b)));
-    symbol name8 = c.str_symbol("rule8");
-    fp.add_rule(rule8, name8);
-
-    // r3(a,b) && !(ult(a,b)) --> false
-    expr bad_phi = !ult(a, b);
-    if (!is_sat)
-        bad_phi = !bad_phi;
-    expr query = exists(a, b, r3(a, b) && bad_phi);
-    check_result result = fp.query(query);
+    if (is_multi) {
+        MT_fixedpoint mtfp(c, /* is_signed= */ false, size, /* int2bv_preprocess */ !gno_int2bv_preprocess);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
 
     return result;
 }
-
-check_result swap2_bv(unsigned int size) { return swap2_bv_base(size, /*is_sat=*/true); }
-check_result swap2_bv_unsat(unsigned int size) { return swap2_bv_base(size, /*is_sat=*/false); }
-// ===================== [swap2_bv] =====================
+// =========================== [swap] ==========================
 
 // ======================= MAIN LOGIC =======================
 
@@ -579,10 +451,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
         {"opposite-signs",              {opposite_signs,                true}},
         {"abs-ge",                      {abs_ge,                        true}},
         {"cond-negate",                 {cond_negate,                   true}},
-        //{"swap_bv",                     {swap_bv,                       false}},
-        //{"swap2_bv",                    {swap2_bv,                      false}},
-        //{"swap_bv_unsat",               {swap_bv_unsat,                 false}},
-        //{"swap2_bv_unsat",              {swap2_bv_unsat,                false}},
+        {"swap",                        {swap,                          true}},
     };
 
     std::string bench = "";
