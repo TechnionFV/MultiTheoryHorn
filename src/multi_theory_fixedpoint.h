@@ -6,40 +6,12 @@
 #pragma once
 #include <z3++.h>
 #include <stack>
+#include "mth_utils.h"
 #include "utils.h"
 #include "Bv2IntTranslator.h"
 #include "Int2BvTranslator.h"
 
 namespace multi_theory_horn {
-    enum class Theory { IAUF, BV };
-
-    struct CHC {
-        z3::expr_vector const vars;
-        z3::expr body_preds;
-        z3::expr body_formula;
-        z3::expr head;
-
-        CHC(z3::expr_vector const& v, z3::expr bp, z3::expr bf, z3::expr h)
-            : vars(v), body_preds(bp), body_formula(bf), head(h) {}
-
-        z3::expr get_rule_expr() const {
-            assert(!head.is_true() || !head.is_false() && 
-                        "Head of normal CHC rule cannot be a boolean expression");
-            return z3::forall(vars, z3::implies(body_preds && body_formula, head));
-        }
-
-        z3::expr get_query_expr() const {
-            assert(head.is_false() && 
-                        "Head of query CHC must be false");
-            return z3::exists(vars, body_preds && body_formula);
-        }
-
-        z3::expr get_body_expr() const {
-            return body_preds && body_formula;
-        }
-    };
-
-
     class MT_fixedpoint {
     private:
         z3::context& m_ctx;
