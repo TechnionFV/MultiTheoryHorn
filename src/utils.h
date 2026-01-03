@@ -20,12 +20,17 @@ namespace multi_theory_horn {
         }
     };
 
-
     struct compare_func_decl {
 		bool operator() (const z3::func_decl& lhs, const z3::func_decl& rhs) const {
 			return lhs.id() < rhs.id();
 		}
 	};
+
+    struct compare_expr {
+        bool operator() (const z3::expr& lhs, const z3::expr& rhs) const {
+            return lhs.hash() < rhs.hash();
+        }
+    };
 
     using VarMap = std::map<z3::func_decl, z3::expr, compare_func_decl>;
 
