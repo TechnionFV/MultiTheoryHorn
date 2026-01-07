@@ -427,6 +427,107 @@ check_result swap(unsigned int size, bool is_multi) {
 }
 // =========================== [swap] ==========================
 
+// ====================== [max-inv-concat] =====================
+// unsigned benchmark
+check_result max_inv_concat(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    unsigned int plus1_size = size + 1;
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bv_plus1_sort = c.bv_sort(plus1_size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_plus1_sort, bv_plus1_sort, bv_plus1_sort, bool_sort);
+    func_decl s = function("s", bv_plus1_sort, bv_plus1_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+    fp.register_relation(s);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr z = c.bv_const("z", size);
+    expr a = c.bv_const("a", size);
+    expr i = c.bv_const("i", size);
+
+    expr y2 = c.bv_const("y2",plus1_size);
+    expr a2 = c.bv_const("a2",plus1_size);
+    expr j = c.bv_const("j",plus1_size);
+
+    // Rules
+    // x > y, x - y >= z --> p(y,z,x,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, z, implies(ugt(x, y) && uge(x - y, z), p(y, z, x, c.bv_val(0, size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(y,z,a,i), i < z --> p(y,z,a-1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(y, z, a, i, implies(p(y, z, a, i) && ult(i, z), p(y, z, a - c.bv_val(1, size), i + c.bv_val(1, size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(y,z,a,i), !(i < z) --> q(y,a)
+    // fragment: IA[size]
+    expr rule3 = forall(y, z, a, i, implies(p(y, z, a, i) && !ult(i, z), q(y, a)));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a), y2=zeroext(1,y), a2=zeroext(1,a) --> r(y2,a2,a2)
+    // fragment: BV
+    expr rule4 = forall(y,a,y2,a2, implies(q(y,a) && (y2 == zext(y,1)) && (a2 == zext(a,1)), r(y2,a2,a2)));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // r(y2,a2,j), j > 0 --> r(y2 + 1, a2 + 1, j - 1)
+    // fragment: IA[size + 1]
+    expr rule5 = forall(y2, a2, j, implies(r(y2,a2,j) && ugt(j,0), r(y2 + c.bv_val(1, plus1_size),a2 + c.bv_val(1, plus1_size),j - c.bv_val(1, plus1_size))));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(y2,a2,j), !(j > 0) --> s(y2,a2)
+    // fragment: IA[size + 1]
+    expr rule6 = forall(y2, a2, j, implies(r(y2,a2,j) && !ugt(j,0), s(y2,a2)));
+    symbol name6 = c.str_symbol("rule6");
+    fp.add_rule(rule6, name6);
+    
+    // s(y2,a2), !(a2 == max(a2,y2)) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(y2);
+    query_vars.push_back(a2);
+    expr query_pred = s(y2, a2); 
+    expr bad_phi = !(a2 == (a2 ^ ((a2 ^ y2) & ite(ult(a2, y2), c.bv_val(-1, plus1_size), c.bv_val(0, plus1_size)))));
+    
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+
+// ====================== [max-inv-concat] =====================
+
 // ================== [opposite-signs-concat] ==================
 // signed benchmark
 check_result opposite_signs_concat(unsigned int size, bool is_multi) {
@@ -696,6 +797,7 @@ static int run_benchmarks_cli(int argc, char** argv) {
         {"abs-ge",                      {abs_ge,                        true}},
         {"cond-negate",                 {cond_negate,                   true}},
         {"swap",                        {swap,                          true}},
+        {"max-inv-concat",              {max_inv_concat,                true}},
         {"opposite-signs-concat",       {opposite_signs_concat,         true}},
         {"cond-negate-concat",          {cond_negate_concat,            true}},
     };
