@@ -139,6 +139,16 @@ namespace multi_theory_horn {
         m_fp_bv.set(p);
     }
 
+    MT_fixedpoint::MT_fixedpoint(z3::context& ctx)
+        : MT_fixedpoint(ctx, false, 4, true, true) {
+        // TODO: In the future, only initialize the context.
+        // TODO: The rest of the class fields will be inferred automatically.
+    }
+
+    void MT_fixedpoint::from_solver(z3::fixedpoint& fp) {
+        NOT_IMPLEMENTED();
+    }
+
     void MT_fixedpoint::add_rule(z3::expr& rule, Theory theory, z3::symbol const& name) {
         switch (theory) {
             case Theory::IAUF:
@@ -188,6 +198,10 @@ namespace multi_theory_horn {
         p_to_strengthening_expr_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
 
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
+    }
+
+    z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi) {
+        NOT_IMPLEMENTED();
     }
 
     z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory) {
@@ -278,8 +292,8 @@ namespace multi_theory_horn {
                         z3::expr int_p_interp = bv2int_t.translate(p_interp);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
                         z3::expr_vector lemmas(m_ctx);
-                        for (const z3::expr& lemma : bv2int_t.lemmas()) {
-                            lemmas.push_back(lemma);
+                        for (const auto& kv : bv2int_t.lemmas()) {
+                            lemmas.push_back(kv.second);
                         }
                         int_p_interp = int_p_interp && z3::mk_and(lemmas);
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
@@ -378,8 +392,8 @@ namespace multi_theory_horn {
                         z3::expr phi_trans = bv2int_t.translate(phi);
                         // Go over all the lemmas and conjoin them with the tranlsated predicate
                         z3::expr_vector lemmas(m_ctx);
-                        for (const z3::expr& lemma : bv2int_t.lemmas()) {
-                            lemmas.push_back(lemma);
+                        for (const auto& kv : bv2int_t.lemmas()) {
+                            lemmas.push_back(kv.second);
                         }
                         phi_trans = (phi_trans) && z3::mk_and(lemmas);
                         DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);

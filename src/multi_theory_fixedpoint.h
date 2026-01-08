@@ -99,6 +99,9 @@ namespace multi_theory_horn {
         // Construction / destruction
         //--------------------------------------------------------------------------
         explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess = true, bool simplify = true);
+        explicit MT_fixedpoint(z3::context& ctx);
+
+        void from_solver(z3::fixedpoint& fp);
 
         //--------------------------------------------------------------------------
         // Quick access to the underlying fixedpoint engine
@@ -117,6 +120,12 @@ namespace multi_theory_horn {
         /// \param q_phi The formula to be queried.
         /// \param theory The theory indicating the engine to which the query belongs.
         z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory);
+
+        //--------------------------------------------------------------------------
+        // Updated query declaration
+        //--------------------------------------------------------------------------
+        // The theory of the query is determined internally, so no explicit theory parameter is required. 
+        z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi);
 
         //--------------------------------------------------------------------------
         // Forwarding of fixepoint most common calles
