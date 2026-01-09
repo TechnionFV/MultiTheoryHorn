@@ -56,7 +56,7 @@ namespace multi_theory_horn {
                 // Note: numerals are handled in translate_bv: Z3_OP_ANUM
                 // Constants are apps with no arguments
                 std::string name = e.decl().name().str();
-                if (m_int2bv_var_map.find(e.decl()) != m_int2bv_var_map.end()) {
+                if (m_int2bv_var_map.find(e) != m_int2bv_var_map.end()) {
                     // If we have a mapping for this constant use it
                     r = ctx.bv_const(name.c_str(), m_bv_size);
                 } else {

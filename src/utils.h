@@ -2,6 +2,7 @@
 #include <cassert>
 #include <iostream>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <optional>
 #include <z3++.h>
@@ -32,8 +33,18 @@ namespace multi_theory_horn {
         }
     };
 
-    using VarMap = std::map<z3::func_decl, z3::expr, compare_func_decl>;
-
+    using VarMap = std::map<z3::expr, z3::expr, compare_expr>;
+    inline std::string dump(const VarMap& var_map) {
+        std::string result = "{\n";
+        for (const auto& pair : var_map) {
+            result += "  " + pair.first.to_string() + " -> " + pair.second.to_string() + "\n";
+        }
+        result += "}";
+        return result;
+    }
+    using VarSet = std::set<z3::expr, compare_expr>;
+    using VarIndexMap = std::map<z3::expr, int, compare_expr>;
+    using VarLemmaMap = std::map<z3::expr, z3::expr, compare_expr>;
     class PredicateMap {
         using Map = std::map<
             z3::func_decl,
@@ -99,6 +110,30 @@ namespace multi_theory_horn {
             if (p(s))
                 return true;
         return false;
+    }
+
+    inline int get_num_conjuncts(const z3::expr& e) {
+        if (e.is_and()) {
+            return e.num_args();
+        }
+        return 1;
+    }
+
+    /// @brief Gets all the conjuncts of an "and" expression as an expr_vector.
+    /// If the expression is not an "and", returns a vector with the expression itself.
+    /// @param e The expression to get the conjuncts from.
+    /// @return An expr_vector containing the conjuncts.
+    z3::expr_vector get_conjuncts(const z3::expr& e);
+
+    inline int get_num_disjuncts(const z3::expr& e) {
+        if (e.is_or()) {
+            return e.num_args();
+        }
+        return 1;
+    }
+
+    inline bool is_uninterpreted_predicate(const z3::expr& e) {
+        return e.decl().decl_kind() == Z3_OP_UNINTERPRETED;
     }
 
     inline int64_t sign_extend(uint64_t raw, unsigned width) {
