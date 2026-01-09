@@ -66,9 +66,13 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else if (e.is_var()) {
-            // This should be unreachable as we declare variables
-            // as constants (0-arity apps)
-            UNREACHABLE();
+            // Variables should have a VarMap entry.
+            auto it = m_bv2int_var_map.find(e);
+            assert(it != m_bv2int_var_map.end() && "Variable not found in VarMap");
+            r = it->second;
+            assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
+            unsigned k = e.get_sort().bv_size();
+            create_bound_lemma(r, k);
         }
         else {
             // is_app
@@ -388,9 +392,9 @@ namespace multi_theory_horn {
         // Constants are apps with no arguments
         std::string name = e.decl().name().str();
         z3::expr r(ctx);
-        if (m_bv2int_var_map.find(e.decl()) != m_bv2int_var_map.end()) {
+        if (m_bv2int_var_map.find(e) != m_bv2int_var_map.end()) {
             // If we have a mapping for this constant, use it
-            r = m_bv2int_var_map.at(e.decl());
+            r = m_bv2int_var_map.at(e);
         } else {
             // Otherwise, create a new integer constant
             r = ctx.int_const(name.c_str());

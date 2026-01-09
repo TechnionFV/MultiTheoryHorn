@@ -33,7 +33,48 @@ namespace multi_theory_horn {
         }
     };
 
+    // TODO: Delete this when not needed.
     enum class Theory { IAUF, BV };
+
+    class MTHFixedpointSet {
+    private:
+        z3::context& ctx;
+        
+        // Tracks the signedness of the entire set
+        std::optional<bool> global_is_signed;
+        std::optional<z3::fixedpoint> bv_solver;
+        std::map<unsigned, z3::fixedpoint> iauf_solvers;
+
+        const std::string rule_name = "__mth_rule__";
+        const std::string query_name = "__mth_query__";
+        unsigned rule_count = 0;
+    public:
+        MTHFixedpointSet(z3::context& ctx) : ctx(ctx) {}
+
+        // Checks if the incoming signedness is compatible with the set.
+        // If the set is empty, it sets the signedness.
+        // Returns true if:
+        // 1. The set is empty (sign not yet determined) -> Trivial true
+        // 2. The set is not empty and the signs match.
+        // Returns false only if there is a conflict.
+        bool check_and_set_signedness(bool incoming_sign);
+
+        std::optional<bool> get_global_signedness() const {
+            return global_is_signed;
+        }
+
+        bool hasBVSolver() const;
+        z3::fixedpoint& getOrInitBVSolver();
+        z3::fixedpoint& getBVSolver();
+
+        bool hasIAUFSolver(unsigned bv_size) const;
+        z3::fixedpoint& getOrInitIAUFSolver(unsigned bv_size);
+        z3::fixedpoint& getIAUFSolver(unsigned bv_size);
+
+        z3::symbol get_fresh_rule_name(bool is_query = false);
+
+        friend std::ostream& operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set);
+    };
 
     enum class Signedness { UNKNOWN, SIGNED, UNSIGNED, CONFLICT };
     static constexpr unsigned UNDETERM_BV_SIZE = std::numeric_limits<unsigned>::max();
@@ -43,11 +84,14 @@ namespace multi_theory_horn {
         bool has_bit_manipulating_apps;
         // Variables that do not occur in any predicate application
         // in the body of the clause.
-        std::set<z3::expr, compare_expr> bound_vars;
-        std::set<z3::expr, compare_expr> all_vars;
+        VarSet in_pred_body_vars;
+        VarSet all_vars;
+        // This is map is necessary as we have no other way identifying
+        // variables as their API isn't exposed in Z3 C++ API.
+        VarIndexMap var_index_map;
 
         ClauseAnalysisResult(z3::context& ctx)
-            : bound_vars(), all_vars(), is_signed(Signedness::UNKNOWN), bv_size(UNDETERM_BV_SIZE),
+            : in_pred_body_vars(), all_vars(), is_signed(Signedness::UNKNOWN), bv_size(UNDETERM_BV_SIZE),
               has_bit_manipulating_apps(false) {}
 
         bool is_bv_size_determined() const {
@@ -56,6 +100,18 @@ namespace multi_theory_horn {
 
         bool is_signedness_determined() const {
             return is_signed != Signedness::UNKNOWN && is_signed != Signedness::CONFLICT;
+        }
+
+        bool has_conflicting_signedness() const {
+            return is_signed == Signedness::CONFLICT;
+        }
+
+        bool get_is_signed() const {
+            assert(is_signedness_determined() && "Signedness is not determined");
+            if (is_signed == Signedness::SIGNED)
+                return true;
+            
+            return false;
         }
 
         // Declare operator<< for easy printing
