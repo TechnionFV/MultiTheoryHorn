@@ -6,8 +6,8 @@
 #pragma once
 #include <z3++.h>
 #include <stack>
-#include "mth_utils.h"
 #include "utils.h"
+#include "mth_utils.h"
 #include "Bv2IntTranslator.h"
 #include "Int2BvTranslator.h"
 
@@ -15,6 +15,8 @@ namespace multi_theory_horn {
     class MT_fixedpoint {
     private:
         z3::context& m_ctx;
+
+        MTHFixedpointSet m_mth_fp_set;
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
@@ -55,7 +57,7 @@ namespace multi_theory_horn {
         /// @brief A function that return a conjunction of bit-vector bound expressions
         /// of the form `0 <= var < 2^bv_size` for each variable in `vars`.
         /// @param vars The vector of bit-vector variables for which to create the bound expressions.
-        z3::expr get_bv_expr_bound(z3::expr_vector const& vars);
+        z3::expr get_bv_expr_bound(z3::expr_vector const& vars) const;
 
         /// @brief Adds behind the scenes a fact corresponding to the predicate given by p_expr
         /// which is the destination of an interface constraint.
@@ -71,8 +73,11 @@ namespace multi_theory_horn {
         // Construction / destruction
         //--------------------------------------------------------------------------
         explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess = true, bool simplify = true);
-        explicit MT_fixedpoint(z3::context& ctx);
+        explicit MT_fixedpoint(z3::context& ctx, bool int2bv_preprocess = true, bool simplify = true);
 
+        /// @brief Initializes the multi-theory fixedpoint engine from
+        /// an existing BV fixedpoint engine.
+        /// @param fp The existing BV fixedpoint engine.
         void from_solver(z3::fixedpoint& fp);
 
         //--------------------------------------------------------------------------
