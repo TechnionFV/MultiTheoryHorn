@@ -84,20 +84,6 @@ namespace multi_theory_horn {
         m_literals.clear();
     }
 
-    int Int2BvPreprocessor::calc_num_of_conjuncts(const z3::expr& e) const {
-        if (e.is_and()) {
-            return e.num_args();
-        }
-        return 1;
-    }
-
-    int Int2BvPreprocessor::calc_num_of_disjuncts(const z3::expr& e) const {
-        if (e.is_or()) {
-            return e.num_args();
-        }
-        return 1;
-    }
-
     bool Int2BvPreprocessor::is_const_variable(const z3::expr& e) const {
         // Check if the expression is a variable (0-arity application)
         return e.is_const() && !e.is_numeral() && !e.is_bool();
@@ -190,7 +176,8 @@ namespace multi_theory_horn {
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {
-        int n_conjuncts = calc_num_of_conjuncts(e);
+        // TODO: Make sure the code below is correct as "and" expressions are nested.
+        int n_conjuncts = get_num_conjuncts(e);
 
         m_const_out_of_bounds.resize(n_conjuncts);
         m_func_app_out_of_bounds.resize(n_conjuncts);
@@ -198,7 +185,8 @@ namespace multi_theory_horn {
 
         for (int i = 0; i < n_conjuncts; ++i) {
             z3::expr conjunct = (n_conjuncts == 1) ? e : e.arg(i);
-            int n_disjuncts = calc_num_of_disjuncts(conjunct);
+            // TODO: Make sure the code below is correct as "or" expressions are nested.
+            int n_disjuncts = get_num_disjuncts(conjunct);
 
             m_const_out_of_bounds[i].resize(n_disjuncts, false);
             m_func_app_out_of_bounds[i].resize(n_disjuncts, z3::expr_vector(m_ctx));

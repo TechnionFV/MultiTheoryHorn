@@ -1,18 +1,6 @@
 #include "mth_utils.h"
 
 namespace multi_theory_horn {
-
-    static int get_num_conjuncts(const z3::expr& e) {
-        if (e.is_and()) {
-            return e.num_args();
-        }
-        return 1;
-    }
-
-    static bool is_uninterpreted_predicate(const z3::expr& e) {
-        return e.decl().decl_kind() == Z3_OP_UNINTERPRETED;
-    }
-
     static bool is_signed_bv_op(Z3_decl_kind k) {
         switch (k) {
             case Z3_OP_SLEQ:
@@ -49,9 +37,9 @@ namespace multi_theory_horn {
             else if (current == Signedness::SIGNED) {
                 current = Signedness::CONFLICT;
             }
-        }
-        else {
-            current = Signedness::UNKNOWN;
+        } else {
+            // Otherwise, don't change the current signedness
+            return;
         }
     }
 
@@ -102,7 +90,20 @@ namespace multi_theory_horn {
         return (Z3_OP_BNUM <= k && k <= Z3_OP_BMUL) || (Z3_OP_TRUE <= k && k <= Z3_OP_OEQ);
     }
 
-    static void analyze_expr(z3::expr const& e, bool is_uninterpreted_predicate_arg, ClauseAnalysisResult& result) {
+    // This function is a "hack" to extract the variable index from a z3::expr variable.
+    // The Z3 C++ API does not expose a direct method to get the variable index.
+    // Therefore, we convert the variable to string and parse the index.
+    // When printing a variable, Z3 uses the format (:var <index>)
+    static int extract_var_index(z3::expr const& var) {
+        assert(var.is_var() && "Expression is not a variable");
+        std::string var_str = var.to_string();
+        size_t start_pos = var_str.find(":var ") + 5; // Length of ":var " is 5
+        size_t end_pos = var_str.find(")", start_pos);
+        std::string index_str = var_str.substr(start_pos, end_pos - start_pos);
+        return std::stoi(index_str);
+    }
+
+    static void analyze_expr(z3::expr const& e, bool in_pred_body, ClauseAnalysisResult& result) {
         if (e.is_quantifier()) {
             // In case of horn clauses, this shouldn't be reached
             // This should be unrecahable as quantifiers should not be present
@@ -111,8 +112,10 @@ namespace multi_theory_horn {
         }
         else if (e.is_var()) {
             result.all_vars.insert(e);
-            if (is_uninterpreted_predicate_arg) {
-                result.bound_vars.insert(e);
+            int var_index = extract_var_index(e);
+            result.var_index_map.emplace(e, var_index);
+            if (in_pred_body) {
+                result.in_pred_body_vars.insert(e);
             }
         }
         else {
@@ -135,29 +138,33 @@ namespace multi_theory_horn {
             set_signedness(result.is_signed, is_signed, is_unsigned);
 
             for (unsigned i = 0; i < e.num_args(); ++i) {
-                analyze_expr(e.arg(i), is_uninterpreted_predicate_arg, result);
+                analyze_expr(e.arg(i), in_pred_body, result);
             }
         }
     }
 
-    static void analyze_uninterpreted_predicate(z3::expr const& e, ClauseAnalysisResult& result) {
+    static void analyze_uninterpreted_predicate(z3::expr const& e, bool is_in_body, ClauseAnalysisResult& result) {
         for (unsigned i = 0; i < e.num_args(); ++i) {
-            analyze_expr(e.arg(i), /*is_uninterpreted_predicate_arg*/ true, result);
+            analyze_expr(e.arg(i), /*in_pred_body*/ is_in_body, result);
         }
     }
 
     static void analyze_rule(z3::expr const& body, z3::expr const& head, ClauseAnalysisResult& result) {
-        int conjunct_count = get_num_conjuncts(body);
+        z3::expr_vector conjuncts = get_conjuncts(body);
+        int conjunct_count = conjuncts.size();
         for (int i = 0; i < conjunct_count; ++i) {
-            z3::expr conjunct = (conjunct_count == 1) ? body : body.arg(i);
+            z3::expr conjunct = conjuncts[i];
             // Check if the conjunct is a predicate application
             if (is_uninterpreted_predicate(conjunct)) {
-                analyze_uninterpreted_predicate(conjunct, result);
+                analyze_uninterpreted_predicate(conjunct, /*is_in_body*/ true, result);
             }
             else {
-                analyze_expr(conjunct, /*is_uninterpreted_predicate_arg*/ false, result);
+                analyze_expr(conjunct, /*in_pred_body*/ false, result);
             }
         }
+
+        assert(is_uninterpreted_predicate(head) && "The head of a rule must be an uninterpreted predicate");
+        analyze_uninterpreted_predicate(head, /*is_in_body*/ false, result);
     }
 
     // Checks if all vars have the same bv_size, and sets result.bv_size accordingly.
@@ -224,6 +231,95 @@ namespace multi_theory_horn {
     }
 
     // ====================================================================
+    // MTHFixedpointSet methods
+    // ====================================================================
+
+    bool MTHFixedpointSet::check_and_set_signedness(bool incoming_sign) {
+        if (!global_is_signed.has_value()) {
+            global_is_signed = incoming_sign;
+            return true;
+        }
+        return global_is_signed.value() == incoming_sign;
+    }
+
+    bool MTHFixedpointSet::hasBVSolver() const {
+        return bv_solver.has_value();
+    }
+
+    z3::fixedpoint& MTHFixedpointSet::getOrInitBVSolver() {
+        if (!bv_solver.has_value())
+            bv_solver.emplace(ctx);
+        return *bv_solver;
+    }
+
+    z3::fixedpoint& MTHFixedpointSet::getBVSolver() {
+        assert(bv_solver.has_value() && 
+            "BV Solver not found.");
+        return *bv_solver;
+    }
+
+    bool MTHFixedpointSet::hasIAUFSolver(unsigned bv_size) const {
+        return iauf_solvers.find(bv_size) != iauf_solvers.end();
+    }
+
+    z3::fixedpoint& MTHFixedpointSet::getOrInitIAUFSolver(unsigned bv_size) {
+        auto it = iauf_solvers.find(bv_size);
+        if (it != iauf_solvers.end())
+            return it->second;
+        
+        auto result = iauf_solvers.emplace(
+            std::piecewise_construct,
+            std::forward_as_tuple(bv_size),
+            std::forward_as_tuple(ctx)
+        );
+
+        return result.first->second;
+    }
+
+    z3::fixedpoint& MTHFixedpointSet::getIAUFSolver(unsigned bv_size) {
+        auto it = iauf_solvers.find(bv_size);
+        assert(it != iauf_solvers.end() && "IAUF Solver not found for the requested bv_size.");
+        return it->second;
+    }
+
+    z3::symbol MTHFixedpointSet::get_fresh_rule_name(bool is_query) {
+        std::string name_str = is_query ? query_name : rule_name;
+        name_str += std::to_string(rule_count);
+        rule_count++;
+        return ctx.str_symbol(name_str.c_str());
+    }
+
+    std::ostream & operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set) {
+        os << "MTHFixedpointSet - ";
+        if (mth_fp_set.global_is_signed.has_value()) {
+            os << "(Global Signedness: " << (mth_fp_set.global_is_signed.value() ? "SIGNED" : "UNSIGNED") << ")" << std::endl;
+        } else {
+            os << "(Global Signedness: UNDETERMINED)" << std::endl;
+        }
+
+        if (mth_fp_set.bv_solver.has_value()) {
+            os << "  BV Solver: Initialized" << std::endl;
+            os << *(mth_fp_set.bv_solver);
+        } else {
+            os << "  BV Solver: Not Initialized" << std::endl;
+        }
+        os << std::endl;
+
+        os << "  IAUF Solvers:" << std::endl;
+        if (mth_fp_set.iauf_solvers.empty()) {
+            os << "    None" << std::endl;
+        } else {
+            for (const auto& [bv_size, solver] : mth_fp_set.iauf_solvers) {
+                os << "    BV Size " << bv_size << ": Initialized" << std::endl;
+                os << solver;
+                os << std::endl;
+            }
+        }
+        os << std::endl;
+        return os;
+    }
+
+    // ====================================================================
     // ClauseAnalysisResult methods
     // ====================================================================
 
@@ -256,12 +352,12 @@ namespace multi_theory_horn {
 
         os << "  Has Bit-Manipulating Apps: " << (result.has_bit_manipulating_apps ? "Yes" : "No") << std::endl;
 
-        os << "  Bound Variables: ";
-        int num_bound_vars = result.bound_vars.size();
-        for (int i = 0; i < num_bound_vars; ++i) {
-            auto var = *std::next(result.bound_vars.begin(), i);
+        os << "  In Predicate Body: ";
+        int num_in_pred_body = result.in_pred_body_vars.size();
+        for (int i = 0; i < num_in_pred_body; ++i) {
+            auto var = *std::next(result.in_pred_body_vars.begin(), i);
             os << var;
-            if (i != num_bound_vars - 1) {
+            if (i != num_in_pred_body - 1) {
                 os << ", ";
             }
         }
@@ -275,6 +371,12 @@ namespace multi_theory_horn {
             if (i != num_all_vars - 1) {
                 os << ", ";
             }
+        }
+        os << std::endl;
+
+        os << "  Variable Index Map: " << std::endl;
+        for (const auto& [var, index] : result.var_index_map) {
+            os << "    " << var << " -> " << index << std::endl;
         }
         os << std::endl;
         return os;
