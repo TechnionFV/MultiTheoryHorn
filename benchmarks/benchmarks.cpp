@@ -104,14 +104,14 @@ check_result max_inv(unsigned int size, bool is_multi) {
     expr bad_phi = !(a == (a ^ ((a ^ y) & ite(ult(a, y), c.bv_val(-1, size), c.bv_val(0, size)))));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query); 
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -178,14 +178,14 @@ check_result opposite_signs(unsigned int size, bool is_multi) {
     expr bad_phi = !((a ^ b) < c.bv_val(0,size));
     
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -270,14 +270,14 @@ check_result opposite_signs_diff(unsigned int size, bool is_multi) {
     expr bad_phi = !((a ^ b) < c.bv_val(0,size));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query); 
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -355,14 +355,14 @@ check_result opposite_signs_diff2(unsigned int size, bool is_multi) {
     expr bad_phi = !((a ^ b) < c.bv_val(0,size));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -430,14 +430,14 @@ check_result abs_ge(unsigned int size, bool is_multi) {
     expr bad_phi = !(x <= i);
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: p --> p^{size}
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -515,14 +515,14 @@ check_result abs_sum(unsigned int size, bool is_multi) {
     expr bad_phi = (a >= 0) && !(((c.bv_val(1,size) | ite(x >= 0, c.bv_val(0,size), c.bv_val(-1,size))) * x) >= ((c.bv_val(1,size) | ite(y >= 0, c.bv_val(0,size), c.bv_val(-1,size))) * y));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -586,14 +586,14 @@ check_result cond_negate(unsigned int size, bool is_multi) {
     expr bad_phi = (b == ite(i <= x, c.bv_val(1, size), c.bv_val(0, size))) && !(((x ^ (-b)) + b) == -x);
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -678,14 +678,14 @@ check_result cond_negate_diff(unsigned int size, bool is_multi) {
     expr bad_phi = !(((a ^ (-b)) + b) > c.bv_val(0,size));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -766,14 +766,14 @@ check_result swap(unsigned int size, bool is_multi) {
     expr bad_phi = (a1 == (a ^ b)) && (b1 == (b ^ a1)) && !ult((a1 ^ b1), b1);
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -857,14 +857,14 @@ check_result swap_sum(unsigned int size, bool is_multi) {
     expr bad_phi = (y1 == (y ^ a)) && (a1 == (a ^ y1)) && !uge((y1 ^ a1), a1);
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -925,14 +925,14 @@ check_result turn_off_rm1(unsigned int size, bool is_multi) {
     expr bad_phi = !((z&(z-(c.bv_val(1,size)))) == c.bv_val(0,size));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: q^{size} --> q
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -1016,14 +1016,14 @@ check_result turn_on_lsb(unsigned int size, bool is_multi) {
     expr bad_phi = !(((a + b) | (c.bv_val(1,size))) == (c.bv_val(1,size)));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi);
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -1116,14 +1116,14 @@ check_result max_inv_concat(unsigned int size, bool is_multi) {
     expr bad_phi = !(a2 == (a2 ^ ((a2 ^ y2) & ite(ult(a2, y2), c.bv_val(-1, plus1_size), c.bv_val(0, plus1_size)))));
     
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query); 
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -1224,14 +1224,14 @@ check_result opposite_signs_concat(unsigned int size, bool is_multi) {
     expr bad_phi = !((a2 ^ b2) < 0);
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{2*size}, s^{2*size} --> s
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
@@ -1324,14 +1324,14 @@ check_result abs_concat(unsigned int size, bool is_multi) {
     expr bad_phi = !(((c.bv_val(1,plus1_size) | ite(a2 >= 0, c.bv_val(0,plus1_size), c.bv_val(-1,plus1_size))) * a2) > ((c.bv_val(1,plus1_size) | ite(b2 >= 0, c.bv_val(0,plus1_size), c.bv_val(-1,plus1_size))) * b2));
 
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
     
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
     
@@ -1434,14 +1434,14 @@ check_result cond_negate_concat(unsigned int size, bool is_multi) {
     expr bad_phi = (b == ite(i2 <= x2, c.bv_val(1, d_size), c.bv_val(0, d_size))) && !(((x2 ^ (-b)) + b) == -x2);
     
     check_result result = check_result::unknown;
+    expr query = exists(query_vars, query_pred && bad_phi);
 
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{2*size}, s^{2*size} --> s
         MT_fixedpoint mtfp(c);
         mtfp.from_solver(fp);
-        result = mtfp.query(query_vars, query_pred, bad_phi); 
+        result = mtfp.query(query);
     } else { // bv only
-        expr query = exists(query_vars, query_pred && bad_phi);
         result = fp.query(query);
     }
 
