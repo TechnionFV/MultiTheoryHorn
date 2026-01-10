@@ -150,12 +150,12 @@ namespace multi_theory_horn {
     }
 
     static void analyze_clause_body(z3::expr const& body, ClauseAnalysisResult& result) {
-        z3::expr_vector conjuncts = get_conjuncts(body);
+        z3::expr_vector conjuncts = utils::get_conjuncts(body);
         int conjunct_count = conjuncts.size();
         for (int i = 0; i < conjunct_count; ++i) {
             z3::expr conjunct = conjuncts[i];
             // Check if the conjunct is a predicate application
-            if (is_uninterpreted_predicate(conjunct)) {
+            if (utils::is_uninterpreted_predicate(conjunct)) {
                 analyze_uninterpreted_predicate(conjunct, /*is_in_body*/ true, result);
             }
             else {
@@ -166,7 +166,7 @@ namespace multi_theory_horn {
 
     static void analyze_rule(z3::expr const& body, z3::expr const& head, ClauseAnalysisResult& result) {
         analyze_clause_body(body, result);
-        assert(is_uninterpreted_predicate(head) && "The head of a rule must be an uninterpreted predicate");
+        assert(utils::is_uninterpreted_predicate(head) && "The head of a rule must be an uninterpreted predicate");
         analyze_uninterpreted_predicate(head, /*is_in_body*/ false, result);
     }
 
@@ -197,6 +197,9 @@ namespace multi_theory_horn {
         result.bv_size = common_bv_size;
     }
 
+    //==============================================================================
+    //                              PUBLIC METHODS
+    //==============================================================================
     z3::expr_vector get_clause_vars(z3::expr const& clause) {
         z3::context& c = clause.ctx();
         z3::expr_vector vars(c);
@@ -244,7 +247,6 @@ namespace multi_theory_horn {
     // ====================================================================
     // MTHFixedpointSet methods
     // ====================================================================
-
     bool MTHFixedpointSet::check_and_set_signedness(bool incoming_sign) {
         if (!global_is_signed.has_value()) {
             global_is_signed = incoming_sign;
@@ -333,7 +335,6 @@ namespace multi_theory_horn {
     // ====================================================================
     // ClauseAnalysisResult methods
     // ====================================================================
-
     std::ostream& operator<<(std::ostream& os, const ClauseAnalysisResult& result) {
         os << "Clause Analysis Result:" << std::endl;
         os << "  Signedness: ";
