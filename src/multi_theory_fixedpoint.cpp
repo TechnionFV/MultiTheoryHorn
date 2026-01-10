@@ -95,12 +95,12 @@ namespace multi_theory_horn {
         z3::expr head = underlying_clause.arg(1);
 
         // TODO: Maybe inline the following logic in the translator itself.
-        int num_conjuncts = get_num_conjuncts(body);
+        int num_conjuncts = utils::get_num_conjuncts(body);
         z3::expr_vector new_conjunct(ctx);
         for (int i = 0; i < num_conjuncts; ++i) {
             z3::expr conjunct = (num_conjuncts == 1) ? body : body.arg(i);
             z3::expr translated_conjunct(ctx);
-            if (is_uninterpreted_predicate(conjunct)) {
+            if (utils::is_uninterpreted_predicate(conjunct)) {
                 z3::func_decl p_new = bv_predicate_to_int(conjunct.decl(), clause_analysis.bv_size);
                 z3::expr translated_arg(ctx);
                 z3::expr_vector new_args(ctx);
@@ -132,7 +132,7 @@ namespace multi_theory_horn {
 
         z3::expr new_body = z3::mk_and(new_conjunct);
         z3::expr new_head(ctx);
-        assert(is_uninterpreted_predicate(head) && "Head must be an uninterpreted predicate");
+        assert(utils::is_uninterpreted_predicate(head) && "Head must be an uninterpreted predicate");
         z3::func_decl p_head_new = bv_predicate_to_int(head.decl(), clause_analysis.bv_size);
         z3::expr_vector new_head_args(ctx);
         for (unsigned j = 0; j < head.num_args(); ++j) {
