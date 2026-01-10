@@ -149,7 +149,7 @@ namespace multi_theory_horn {
         }
     }
 
-    static void analyze_rule(z3::expr const& body, z3::expr const& head, ClauseAnalysisResult& result) {
+    static void analyze_clause_body(z3::expr const& body, ClauseAnalysisResult& result) {
         z3::expr_vector conjuncts = get_conjuncts(body);
         int conjunct_count = conjuncts.size();
         for (int i = 0; i < conjunct_count; ++i) {
@@ -162,9 +162,16 @@ namespace multi_theory_horn {
                 analyze_expr(conjunct, /*in_pred_body*/ false, result);
             }
         }
+    }
 
+    static void analyze_rule(z3::expr const& body, z3::expr const& head, ClauseAnalysisResult& result) {
+        analyze_clause_body(body, result);
         assert(is_uninterpreted_predicate(head) && "The head of a rule must be an uninterpreted predicate");
         analyze_uninterpreted_predicate(head, /*is_in_body*/ false, result);
+    }
+
+    static void analyze_query(z3::expr const& body, ClauseAnalysisResult& result) {
+        analyze_clause_body(body, result);
     }
 
     // Checks if all vars have the same bv_size, and sets result.bv_size accordingly.
@@ -209,14 +216,18 @@ namespace multi_theory_horn {
         analyze_vars(vars, result);
 
         // TODO: Implement query analysis
-        if (clause.is_exists())
-            NOT_IMPLEMENTED();
+        if (clause.is_exists()) {
+            assert(clause.body().is_and() && "The clause body must be a conjunction");
+            z3::expr body = clause.body();
+            analyze_query(body, result);
+        }
         else if (clause.is_forall()) {
             assert(clause.body().is_implies() && "The clause body must be an implication");
             z3::expr body = clause.body().arg(0);
             z3::expr head = clause.body().arg(1);
 
-            // TODO: Implement query analysis
+            // Theoretically, a query can be a forall clause that implies false.
+            // Implement only if needed.
             if (head.is_false())
                 NOT_IMPLEMENTED();
 
