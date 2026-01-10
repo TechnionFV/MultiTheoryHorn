@@ -28,7 +28,7 @@ namespace multi_theory_horn {
 
     bool Int2BvTranslator::is_int_relation(const z3::expr& e) const {
         Z3_decl_kind f = e.decl().decl_kind();
-        bool has_int_arg = any_of(e.args(), [&](z3::expr arg) { return arg.is_int(); });
+        bool has_int_arg = utils::any_of(e.args(), [&](z3::expr arg) { return arg.is_int(); });
         return Z3_OP_LE <= f && f <= Z3_OP_GT && has_int_arg;
     }
 

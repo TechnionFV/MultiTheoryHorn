@@ -94,7 +94,7 @@ namespace multi_theory_horn {
         z3::expr res(m_ctx);
 
         if (m_is_signed) {
-            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
+            int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bv_size);
             switch (e_kind) {
                 case Z3_OP_ADD:
                 case Z3_OP_SUB:
@@ -113,7 +113,7 @@ namespace multi_theory_horn {
             }
         }
         else {
-            uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
+            uint64_t upper_bound = utils::get_unsigned_bv_upper_bound(m_bv_size);
             switch (e_kind) {
                 case Z3_OP_ADD:
                     res = (e > m_ctx.int_val(upper_bound));
@@ -164,20 +164,20 @@ namespace multi_theory_horn {
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
         if (m_is_signed) {
-            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
-            int64_t upper_bound = get_signed_bv_upper_bound(m_bv_size);
+            int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bv_size);
+            int64_t upper_bound = utils::get_signed_bv_upper_bound(m_bv_size);
             return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
         }
 
-        uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
-        uint64_t lower_bound = get_unsigned_bv_lower_bound(m_bv_size);
+        uint64_t upper_bound = utils::get_unsigned_bv_upper_bound(m_bv_size);
+        uint64_t lower_bound = utils::get_unsigned_bv_lower_bound(m_bv_size);
         assert(m_bv_size <= 64 && "Unexpected bv size");
         return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {
         // TODO: Make sure the code below is correct as "and" expressions are nested.
-        int n_conjuncts = get_num_conjuncts(e);
+        int n_conjuncts = utils::get_num_conjuncts(e);
 
         m_const_out_of_bounds.resize(n_conjuncts);
         m_func_app_out_of_bounds.resize(n_conjuncts);
@@ -186,7 +186,7 @@ namespace multi_theory_horn {
         for (int i = 0; i < n_conjuncts; ++i) {
             z3::expr conjunct = (n_conjuncts == 1) ? e : e.arg(i);
             // TODO: Make sure the code below is correct as "or" expressions are nested.
-            int n_disjuncts = get_num_disjuncts(conjunct);
+            int n_disjuncts = utils::get_num_disjuncts(conjunct);
 
             m_const_out_of_bounds[i].resize(n_disjuncts, false);
             m_func_app_out_of_bounds[i].resize(n_disjuncts, z3::expr_vector(m_ctx));

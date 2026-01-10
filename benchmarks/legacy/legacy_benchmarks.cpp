@@ -34,13 +34,13 @@ bool gno_int2bv_preprocess = false;
 expr bounds(context& c, const expr& e, bool is_signed, unsigned int k) {
     if (is_signed) {
         uint64_t N = (uint64_t)1 << (k - 1);
-        int64_t lower_bound = get_signed_bv_lower_bound(k);
-        int64_t upper_bound = get_signed_bv_upper_bound(k);
+        int64_t lower_bound = utils::get_signed_bv_lower_bound(k);
+        int64_t upper_bound = utils::get_signed_bv_upper_bound(k);
         return (c.int_val(lower_bound) <= e) && (e <= c.int_val(upper_bound));
     }
     assert(k <= 64 && "Bit-vector size too large");
-    uint64_t upper_bound = get_unsigned_bv_upper_bound(k);
-    uint64_t lower_bound = get_unsigned_bv_lower_bound(k);
+    uint64_t upper_bound = utils::get_unsigned_bv_upper_bound(k);
+    uint64_t lower_bound = utils::get_unsigned_bv_lower_bound(k);
     return (c.int_val(lower_bound) <= e) && (e <= c.int_val(upper_bound));
 }
 
