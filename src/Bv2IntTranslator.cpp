@@ -36,7 +36,7 @@ namespace multi_theory_horn {
 
     bool Bv2IntTranslator::is_bv_relation(const z3::expr& e) const {
         Z3_decl_kind f = e.decl().decl_kind();
-        bool has_bv_arg = any_of(e.args(), [&](z3::expr arg) { return arg.is_bv(); });
+        bool has_bv_arg = utils::any_of(e.args(), [&](z3::expr arg) { return arg.is_bv(); });
         return Z3_OP_ULEQ <= f && f <= Z3_OP_SGT && has_bv_arg;
     }
 
@@ -164,7 +164,7 @@ namespace multi_theory_horn {
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
                 uint64_t raw = e.get_numeral_uint64();
                 if (m_is_signed) {
-                    int64_t raw_int = sign_extend(raw, e.get_sort().bv_size());
+                    int64_t raw_int = utils::sign_extend(raw, e.get_sort().bv_size());
                     return ctx.int_val(raw_int);
                 }
                 return ctx.int_val(raw);

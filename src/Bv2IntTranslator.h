@@ -6,7 +6,7 @@
 //------------------------------------------------------------------------------
 
 #pragma once
-#include "utils.h"
+#include "mth_utils.h"
 #include <z3++.h>
 #include <unordered_map>
 #include <vector>
