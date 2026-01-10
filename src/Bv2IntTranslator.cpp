@@ -36,7 +36,7 @@ namespace multi_theory_horn {
 
     bool Bv2IntTranslator::is_bv_relation(const z3::expr& e) const {
         Z3_decl_kind f = e.decl().decl_kind();
-        bool has_bv_arg = any_of(e.args(), [&](z3::expr arg) { return arg.is_bv(); });
+        bool has_bv_arg = utils::any_of(e.args(), [&](z3::expr arg) { return arg.is_bv(); });
         return Z3_OP_ULEQ <= f && f <= Z3_OP_SGT && has_bv_arg;
     }
 
@@ -66,9 +66,13 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else if (e.is_var()) {
-            // This should be unreachable as we declare variables
-            // as constants (0-arity apps)
-            UNREACHABLE();
+            // Variables should have a VarMap entry.
+            auto it = m_bv2int_var_map.find(e);
+            assert(it != m_bv2int_var_map.end() && "Variable not found in VarMap");
+            r = it->second;
+            assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
+            unsigned k = e.get_sort().bv_size();
+            create_bound_lemma(r, k);
         }
         else {
             // is_app
@@ -160,7 +164,7 @@ namespace multi_theory_horn {
                 assert(e.is_numeral() && "Z3_OP_BNUM should only be used with numerals");
                 uint64_t raw = e.get_numeral_uint64();
                 if (m_is_signed) {
-                    int64_t raw_int = sign_extend(raw, e.get_sort().bv_size());
+                    int64_t raw_int = utils::sign_extend(raw, e.get_sort().bv_size());
                     return ctx.int_val(raw_int);
                 }
                 return ctx.int_val(raw);
@@ -388,9 +392,9 @@ namespace multi_theory_horn {
         // Constants are apps with no arguments
         std::string name = e.decl().name().str();
         z3::expr r(ctx);
-        if (m_bv2int_var_map.find(e.decl()) != m_bv2int_var_map.end()) {
+        if (m_bv2int_var_map.find(e) != m_bv2int_var_map.end()) {
             // If we have a mapping for this constant, use it
-            r = m_bv2int_var_map.at(e.decl());
+            r = m_bv2int_var_map.at(e);
         } else {
             // Otherwise, create a new integer constant
             r = ctx.int_const(name.c_str());

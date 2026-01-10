@@ -7,42 +7,19 @@
 #include <z3++.h>
 #include <stack>
 #include "utils.h"
+#include "mth_utils.h"
 #include "Bv2IntTranslator.h"
 #include "Int2BvTranslator.h"
 
 namespace multi_theory_horn {
-    enum class Theory { IAUF, BV };
-
-    struct CHC {
-        z3::expr_vector const vars;
-        z3::expr body_preds;
-        z3::expr body_formula;
-        z3::expr head;
-
-        CHC(z3::expr_vector const& v, z3::expr bp, z3::expr bf, z3::expr h)
-            : vars(v), body_preds(bp), body_formula(bf), head(h) {}
-
-        z3::expr get_rule_expr() const {
-            assert(!head.is_true() || !head.is_false() && 
-                        "Head of normal CHC rule cannot be a boolean expression");
-            return z3::forall(vars, z3::implies(body_preds && body_formula, head));
-        }
-
-        z3::expr get_query_expr() const {
-            assert(head.is_false() && 
-                        "Head of query CHC must be false");
-            return z3::exists(vars, body_preds && body_formula);
-        }
-
-        z3::expr get_body_expr() const {
-            return body_preds && body_formula;
-        }
-    };
-
-
     class MT_fixedpoint {
     private:
         z3::context& m_ctx;
+
+        MTHFixedpointSet m_mth_fp_set;
+        z3::expr_vector m_original_clauses;
+        std::map<z3::expr, ClauseAnalysisResult, compare_expr> m_clause_analysis_map;
+
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
@@ -83,7 +60,7 @@ namespace multi_theory_horn {
         /// @brief A function that return a conjunction of bit-vector bound expressions
         /// of the form `0 <= var < 2^bv_size` for each variable in `vars`.
         /// @param vars The vector of bit-vector variables for which to create the bound expressions.
-        z3::expr get_bv_expr_bound(z3::expr_vector const& vars);
+        z3::expr get_bv_expr_bound(z3::expr_vector const& vars) const;
 
         /// @brief Adds behind the scenes a fact corresponding to the predicate given by p_expr
         /// which is the destination of an interface constraint.
@@ -93,14 +70,27 @@ namespace multi_theory_horn {
         /// @param theory The theory of the source predicate of the interface constraint.
         void add_predicate_fact(z3::func_decl const& key, z3::expr const& p_expr, Theory theory);
 
+        /// @brief Checks the signedness consistency of the clause analysis result.
+        /// @param clause_analysis The clause analysis result to check.
+        void check_signedness_consistency(ClauseAnalysisResult const& clause_analysis);
+
+        /// @brief Populates the fixedpoint engines before executing queries.
+        /// This includes going over the original clauses, their analysis results,
+        /// and adding them to the appropriate fixedpoint engine after translation
+        /// if necessary.
+        void populate_MTH_fixedpoint_engines();
+
     public:
 
         //--------------------------------------------------------------------------
         // Construction / destruction
         //--------------------------------------------------------------------------
         explicit MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess = true, bool simplify = true);
-        explicit MT_fixedpoint(z3::context& ctx);
+        explicit MT_fixedpoint(z3::context& ctx, bool int2bv_preprocess = true, bool simplify = true);
 
+        /// @brief Initializes the multi-theory fixedpoint engine from
+        /// an existing BV fixedpoint engine.
+        /// @param fp The existing BV fixedpoint engine.
         void from_solver(z3::fixedpoint& fp);
 
         //--------------------------------------------------------------------------
@@ -121,11 +111,10 @@ namespace multi_theory_horn {
         /// \param theory The theory indicating the engine to which the query belongs.
         z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory);
 
-        //--------------------------------------------------------------------------
-        // Updated query declaration
-        //--------------------------------------------------------------------------
-        // The theory of the query is determined internally, so no explicit theory parameter is required. 
-        z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi);
+        /// \brief The query method for the multi-theory fixedpoint engine.
+        /// \param query The query expression.
+        /// \return The result of the query.
+        z3::check_result query(z3::expr& query);
 
         //--------------------------------------------------------------------------
         // Forwarding of fixepoint most common calles
