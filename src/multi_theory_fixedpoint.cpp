@@ -142,7 +142,7 @@ namespace multi_theory_horn {
         }
         new_head = p_head_new(new_head_args);
         z3::expr new_clause = z3::forall(new_vars, z3::implies(new_body, new_head));
-        DEBUG_MSG(OUT() << "Translated BV CHC rule to int CHC rule: " << new_clause << std::endl);
+        DEBUG_MSG(OUT() << "Translated BV (size " << clause_analysis.bv_size << ") CHC rule to int CHC rule: " << new_clause << std::endl);
         return new_clause;
     }
 
@@ -241,11 +241,53 @@ namespace multi_theory_horn {
         }
     }
 
+    void MT_fixedpoint::check_signedness_consistency(ClauseAnalysisResult const& clause_analysis) {
+        if (clause_analysis.has_conflicting_signedness())
+            ASSERT_FALSE("Clause has conflicting signedness information");
+
+        if (clause_analysis.is_signedness_determined()) {
+            bool clause_is_signed = clause_analysis.get_is_signed();
+            if (!m_mth_fp_set.check_and_set_signedness(clause_is_signed)) {
+                ASSERT_FALSE("Conflicting signedness information between clauses");
+            }
+        }
+    }
+
+    void MT_fixedpoint::populate_MTH_fixedpoint_engines() {
+        // After making sure that signedness is consistent within each clause,
+        // and between clauses, we make a final check to see if the signedness
+        // is determined ("known") globally. If not, we cannot proceed.
+        std::optional<bool> global_signedness = m_mth_fp_set.get_global_signedness();
+        if (!global_signedness.has_value())
+            ASSERT_FALSE("Could not determine global signedness from the clauses");
+
+        bool is_signed = global_signedness.value();
+        for (auto clause : m_original_clauses) {
+            z3::symbol name = m_mth_fp_set.get_fresh_rule_name();
+            auto clause_analysis = m_clause_analysis_map.at(clause);
+
+            if (clause_analysis.has_bit_manipulating_apps ||
+                !clause_analysis.is_bv_size_determined()) {
+                m_mth_fp_set.getOrInitBVSolver().add_rule(clause, name);
+            }
+            else {
+                // Bv size is determined and there are no bit-manipulating apps
+                unsigned bv_size = clause_analysis.bv_size;
+                z3::expr_vector bv_vars_exprs = get_clause_vars(clause);
+                VarMap bv_to_int_var_map = build_bv2int_var_map(m_ctx, bv_vars_exprs, clause_analysis);
+                // Initialize a translator with no_overflow guarantee
+                Bv2IntTranslator translator(m_ctx, is_signed, bv_size, /*simplify*/ true, /*no_overflow*/ true, bv_to_int_var_map);
+                z3::expr int_clause = translate_BV_CHC_rule(clause, clause_analysis, translator);
+                m_mth_fp_set.getOrInitIAUFSolver(bv_size).add_rule(int_clause, name);
+            }
+        }
+    }
+
     //==============================================================================
     //                              PUBLIC METHODS
     //==============================================================================
     MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool is_signed, unsigned bv_size, bool int2bv_preprocess, bool simplify)
-        : m_ctx(ctx), m_fp_int(ctx), m_fp_bv(ctx), m_mth_fp_set(ctx),
+        : m_ctx(ctx), m_fp_int(ctx), m_fp_bv(ctx), m_mth_fp_set(ctx), m_original_clauses(ctx),
           m_bv_size(bv_size), m_is_signed(is_signed),
           m_int2bv_preprocess(int2bv_preprocess), m_simplify(simplify) {
         // Set the solvers to use spacer engines for integer and bit-vector theories.
@@ -268,57 +310,18 @@ namespace multi_theory_horn {
     void MT_fixedpoint::from_solver(z3::fixedpoint& fp) {
         // TODO: Understand whether it's needed to deal with assertions.
         DEBUG_MSG(OUT() << "Importing rules from fixedpoint solver:\n" << fp << std::endl);
-        z3::expr_vector clauses = fp.rules();
-
-        std::map<z3::expr, ClauseAnalysisResult, compare_expr> clause_analysis_map;
+        m_original_clauses = fp.rules();
 
         // The first loop analyzes the clauses to determine the global signedness
         // which is needed before we do anything else.
         // Also, to do the analysis only once, we store the analysis results in a map.
-        for (auto clause : clauses) {
+        for (auto clause : m_original_clauses) {
             DEBUG_MSG(OUT() << "Analyzing clause:\n" << clause << std::endl);
             ClauseAnalysisResult clause_analysis = analyze_clause(m_ctx, clause);
             DEBUG_MSG(OUT() << clause_analysis);
-
-            if (clause_analysis.has_conflicting_signedness())
-                ASSERT_FALSE("Clause has conflicting signedness information");
-
-            if (clause_analysis.is_signedness_determined()) {
-                bool clause_is_signed = clause_analysis.get_is_signed();
-                if (!m_mth_fp_set.check_and_set_signedness(clause_is_signed)) {
-                    ASSERT_FALSE("Conflicting signedness information between clauses");
-                }
-            }
-
-            clause_analysis_map.emplace(clause, clause_analysis);            
+            check_signedness_consistency(clause_analysis);
+            m_clause_analysis_map.emplace(clause, clause_analysis);            
         }
-
-        std::optional<bool> global_signedness = m_mth_fp_set.get_global_signedness();
-        if (!global_signedness.has_value())
-            ASSERT_FALSE("Could not determine global signedness from the clauses");
-
-        bool is_signed = global_signedness.value();
-        for (auto clause : clauses) {
-            z3::symbol name = m_mth_fp_set.get_fresh_rule_name();
-            auto clause_analysis = clause_analysis_map.at(clause);
-
-            if (clause_analysis.has_bit_manipulating_apps ||
-                !clause_analysis.is_bv_size_determined()) {
-                m_mth_fp_set.getOrInitBVSolver().add_rule(clause, name);
-            }
-            else {
-                // Bv size is determined and there are no bit-manipulating apps
-                unsigned bv_size = clause_analysis.bv_size;
-                z3::expr_vector bv_vars_exprs = get_clause_vars(clause);
-                VarMap bv_to_int_var_map = build_bv2int_var_map(m_ctx, bv_vars_exprs, clause_analysis);
-                // Initialize a translator with no_overflow guarantee
-                Bv2IntTranslator translator(m_ctx, is_signed, bv_size, /*simplify*/ true, /*no_overflow*/ true, bv_to_int_var_map);
-                z3::expr int_clause = translate_BV_CHC_rule(clause, clause_analysis, translator);
-                m_mth_fp_set.getOrInitIAUFSolver(bv_size).add_rule(int_clause, name);
-            }
-        }
-
-        DEBUG_MSG(OUT() << "The set of solvers after importing rules:\n" << m_mth_fp_set << std::endl);
     }
 
     void MT_fixedpoint::add_rule(z3::expr& rule, Theory theory, z3::symbol const& name) {
@@ -372,9 +375,15 @@ namespace multi_theory_horn {
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
-    z3::check_result MT_fixedpoint::query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi) {
-        // TODO: Implement generic query that infers the theory from the predicate
-        // TODO: Try and make take a single expr argument for the query instead of predicate and phi separately
+    z3::check_result MT_fixedpoint::query(z3::expr& query) {
+        DEBUG_MSG(OUT() << "Analyzing query:\n" << query << std::endl);
+        ClauseAnalysisResult clause_analysis = analyze_clause(m_ctx, query);
+        DEBUG_MSG(OUT() << clause_analysis);
+        check_signedness_consistency(clause_analysis);
+        populate_MTH_fixedpoint_engines();
+        DEBUG_MSG(OUT() << "The set of solvers after population:\n" << m_mth_fp_set << std::endl);
+        
+        // TODO: Implement the query logic
         NOT_IMPLEMENTED();
     }
 

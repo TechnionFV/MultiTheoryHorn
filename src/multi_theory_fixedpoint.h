@@ -17,6 +17,9 @@ namespace multi_theory_horn {
         z3::context& m_ctx;
 
         MTHFixedpointSet m_mth_fp_set;
+        z3::expr_vector m_original_clauses;
+        std::map<z3::expr, ClauseAnalysisResult, compare_expr> m_clause_analysis_map;
+
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
@@ -67,6 +70,16 @@ namespace multi_theory_horn {
         /// @param theory The theory of the source predicate of the interface constraint.
         void add_predicate_fact(z3::func_decl const& key, z3::expr const& p_expr, Theory theory);
 
+        /// @brief Checks the signedness consistency of the clause analysis result.
+        /// @param clause_analysis The clause analysis result to check.
+        void check_signedness_consistency(ClauseAnalysisResult const& clause_analysis);
+
+        /// @brief Populates the fixedpoint engines before executing queries.
+        /// This includes going over the original clauses, their analysis results,
+        /// and adding them to the appropriate fixedpoint engine after translation
+        /// if necessary.
+        void populate_MTH_fixedpoint_engines();
+
     public:
 
         //--------------------------------------------------------------------------
@@ -98,11 +111,10 @@ namespace multi_theory_horn {
         /// \param theory The theory indicating the engine to which the query belongs.
         z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi, Theory theory);
 
-        //--------------------------------------------------------------------------
-        // Updated query declaration
-        //--------------------------------------------------------------------------
-        // The theory of the query is determined internally, so no explicit theory parameter is required. 
-        z3::check_result query(z3::expr_vector& vars, z3::expr& q_pred, z3::expr& q_phi);
+        /// \brief The query method for the multi-theory fixedpoint engine.
+        /// \param query The query expression.
+        /// \return The result of the query.
+        z3::check_result query(z3::expr& query);
 
         //--------------------------------------------------------------------------
         // Forwarding of fixepoint most common calles
