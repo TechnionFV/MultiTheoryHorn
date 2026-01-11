@@ -153,7 +153,7 @@ check_result opposite_signs(unsigned int size, bool is_multi) {
     // Rules
     // x > 0 --> p(x,0,0)
     // fragment: IA[size]
-    expr rule1 = forall(x, implies(x > 0, p(x, c.bv_val(0, size), c.bv_val(0, size))));     
+    expr rule1 = forall(x, implies(x > c.bv_val(0,size), p(x, c.bv_val(0, size), c.bv_val(0, size))));     
     symbol name1 = c.str_symbol("rule1");
     fp.add_rule(rule1, name1);
 
@@ -175,7 +175,7 @@ check_result opposite_signs(unsigned int size, bool is_multi) {
     query_vars.push_back(a);
     query_vars.push_back(b);
     expr query_pred = q(a, b);
-    expr bad_phi = !((a ^ b) < 0);
+    expr bad_phi = !((a ^ b) < c.bv_val(0,size));
     
     check_result result = check_result::unknown;
 
@@ -192,6 +192,183 @@ check_result opposite_signs(unsigned int size, bool is_multi) {
     return result;
 }
 // ====================== [opposite-signs] =====================
+
+// =================== [opposite-signs-diff] ===================
+// signed benchmark
+check_result opposite_signs_diff(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr b = c.bv_const("b", size);
+    expr i = c.bv_const("i", size);
+
+    expr_vector vars(c);
+    vars.push_back(x);
+    vars.push_back(y);
+    vars.push_back(a);
+    vars.push_back(b);
+    vars.push_back(i);
+
+    // Rules
+    // x > y, y > 0 --> p(x,y,0,0,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, implies((x > y) && (y > c.bv_val(0,size)), p(x,y,c.bv_val(0,size),c.bv_val(0,size),c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,b,i), i < x --> p(x,y,a+1,b-1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(vars, implies(p(x,y,a,b,i) && (i < x), p(x,y,a+c.bv_val(1,size),b-c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,b,i), !(i < x) --> q(y,a,b,0)
+    // fragment: IA[size]
+    expr rule3 = forall(vars, implies(p(x,y,a,b,i) && !(i < x), q(y,a,b,c.bv_val(0,size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a,b,i), i < y --> q(y,a-1,b+1,i+1)
+    // fragment: IA[size]
+    expr rule4 = forall(y, a, b, i, implies(q(y,a,b,i) && (i < y), q(y,a-c.bv_val(1,size),b+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+  
+    // q(y,a,b,i), !(i < y) --> r(a,b)
+    // fragment: IA[size]
+    expr rule5 = forall(y, a, b, i, implies(q(y,a,b,i) && !(i < y), r(a,b)));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(a,b), !(a,b have opposite signs) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    expr query_pred = r(a, b);
+    expr bad_phi = !((a ^ b) < c.bv_val(0,size));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// =================== [opposite-signs-diff] ===================
+
+// =================== [opposite-signs-diff2] ==================
+// signed benchmark
+check_result opposite_signs_diff2(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr b = c.bv_const("b", size);
+    expr i = c.bv_const("i", size);
+
+    // Rules
+    // x > y, y > 0 --> p(x,y,x,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, implies((x > y) && (y > c.bv_val(0,size)), p(x,y,x,c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,i), i < y --> p(x,y,a-1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, a, i, implies(p(x,y,a,i) && (i < y), p(x,y,a-c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,i), !(i < y) --> q(x,a,y,0)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, a, i, implies(p(x,y,a,i) && !(i < y), q(x,a,y,c.bv_val(0,size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(x,a,b,i), i < x --> q(x,a,b-1,i+1)
+    // fragment: IA[size]
+    expr rule4 = forall(x, a, b, i, implies(q(x,a,b,i) && (i < x), q(x,a,b-c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // q(x,a,b,i), !(i < x) --> r(a,b)
+    // fragment: IA[size]
+    expr rule5 = forall(x, a, b, i, implies(q(x,a,b,i) && !(i < x), r(a,b)));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(a,b), !(a,b have opposite signs) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    expr query_pred = r(a, b);
+    expr bad_phi = !((a ^ b) < c.bv_val(0,size));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// =================== [opposite-signs-diff2] ==================
 
 // ========================== [abs-ge] =========================
 // signed benchmark
@@ -268,7 +445,7 @@ check_result abs_ge(unsigned int size, bool is_multi) {
 }
 // ========================== [abs-ge] =========================
 
-// ======================== [cond-negate] ======================
+// ======================= [cond-negate] =======================
 // signed benchmark
 check_result cond_negate(unsigned int size, bool is_multi) {
     context c;
@@ -337,7 +514,99 @@ check_result cond_negate(unsigned int size, bool is_multi) {
 
     return result;
 }
-// ======================== [cond-negate] ======================
+// ======================= [cond-negate] =======================
+
+// ===================== [cond-negate-diff] ====================
+// signed benchmark
+check_result cond_negate_diff(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr i = c.bv_const("i", size);
+    expr b = c.bv_const("b", size);
+
+    // Rules
+    // x > y, y > 0 --> p(x,y,0,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, implies((x > y) && (y > c.bv_val(0,size)), p(x,y,c.bv_val(0,size),c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,i), i < x --> p(x,y,a-1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, a, i, implies(p(x,y,a,i) && (i < x), p(x,y,a-c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,i), !(i < x) --> q(y,a,0)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, a, i, implies(p(x,y,a,i) && !(i < x), q(y,a,c.bv_val(0,size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a,i), i < y --> q(y,a+1,i+1)
+    // fragment: IA[size]
+    expr rule4 = forall(y, a, i, implies(q(y,a,i) && (i < y), q(y,a+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+  
+    // q(y,a,i), !(i < y), a < 0 --> r(a,1)
+    // fragment: IA[size]
+    expr rule5 = forall(y, a, i, implies(q(y,a,i) && !(i < y) && (a < c.bv_val(0,size)), r(a,c.bv_val(1,size))));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // q(y,a,i), !(i < y), !(a < 0) --> r(a,0)
+    // fragment: IA[size]
+    expr rule6 = forall(y, a, i, implies(q(y,a,i) && !(i < y) && !(a < c.bv_val(0,size)), r(a,c.bv_val(0,size))));
+    symbol name6 = c.str_symbol("rule6");
+    fp.add_rule(rule6, name6);
+
+    // r(a,b), !((a ^ (-b)) + b == -a) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    expr query_pred = r(a,b);
+    //expr bad_phi = !(((a ^ (-b)) + b) == -a);
+    expr bad_phi = !(((a ^ (-b)) + b) > c.bv_val(0,size));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ===================== [cond-negate-diff] ====================
 
 // =========================== [swap] ==========================
 // unsigned benchmark
@@ -373,7 +642,7 @@ check_result swap(unsigned int size, bool is_multi) {
     // Rules
     // ugt(x,y), ugt(y,0) --> p(x,y,0,0)
     // fragment: IA[size]
-    expr rule1 = forall(x, y, implies(ugt(x, y) && ugt(y, 0), p(x, y, c.bv_val(0, size), c.bv_val(0, size))));
+    expr rule1 = forall(x, y, implies(ugt(x, y) && ugt(y, c.bv_val(0, size)), p(x, y, c.bv_val(0, size), c.bv_val(0, size))));
     symbol name1 = c.str_symbol("rule1");
     fp.add_rule(rule1, name1);
 
@@ -426,6 +695,165 @@ check_result swap(unsigned int size, bool is_multi) {
     return result;
 }
 // =========================== [swap] ==========================
+
+// ======================= [turn-off-rm1] ======================
+// unsigned benchmark
+check_result turn_off_rm1(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr z = c.bv_const("z", size);
+
+    // Rules
+    // x > 0 --> p(x,0,x)
+    // fragment: IA[size]
+    expr rule1 = forall(x, implies(ugt(x, c.bv_val(0,size)), p(x, c.bv_val(0,size), x)));     
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,z), y < x - 1 --> p(x,y+1,z-1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, z, implies(p(x,y,z) && ult(y, x - c.bv_val(1,size)), p(x, y + c.bv_val(1,size), z - c.bv_val(1,size))));     
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,z), !(y < x - 1) --> q(z)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, z, implies(p(x,y,z) && !ult(y, x - c.bv_val(1,size)), q(z)));     
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(z), !((z & (z-1)) == 0) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(z);
+    expr query_pred = q(z); 
+    expr bad_phi = !((z&(z-(c.bv_val(1,size)))) == c.bv_val(0,size));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: q^{size} --> q
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ======================= [turn-off-rm1] ======================
+
+// ======================= [turn-on-lsb] =======================
+// signed benchmark
+check_result turn_on_lsb(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr b = c.bv_const("b", size);
+    expr i = c.bv_const("i", size);
+    expr j = c.bv_const("j", size);
+
+    // Rules
+    // x > 0 --> p(x,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, implies(x > c.bv_val(0,size), p(x, c.bv_val(0, size))));     
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,a), a < x --> p(x,a + 1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, a, implies(p(x, a) && (a < x), p(x, a + c.bv_val(1, size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // x > 0 --> q(x,x,0)
+    // fragment: IA[size]
+    expr rule3 = forall(x, implies(x > c.bv_val(0,size), q(x, x, c.bv_val(0, size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(x,y,b), y > 0 --> q(x,y - 1,b - 1)
+    // fragment: IA[size]
+    expr rule4 = forall(x, y, b, implies(q(x, y, b) && (y > c.bv_val(0,size)), q(x, y - c.bv_val(1, size), b - c.bv_val(1, size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // p(x,a), !(a < x), q(x,y,b), !(y > 0) --> r(a+b)
+    // fragment: IA[size]
+    expr_vector vars(c);
+    vars.push_back(x);
+    vars.push_back(a);
+    vars.push_back(b);
+    vars.push_back(y);
+    expr rule5 = forall(vars, implies(p(x, a) && !(a < x) && q(x,y,b) && !(y > c.bv_val(0,size)), r(a,b)));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(a,b), !(((a + b) | 1) == 1) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(a);
+    query_vars.push_back(b);
+    expr query_pred = r(a,b);
+    expr bad_phi = !(((a + b) | (c.bv_val(1,size))) == (c.bv_val(1,size)));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi);
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ======================= [turn-on-lsb] =======================
 
 // ====================== [max-inv-concat] =====================
 // unsigned benchmark
@@ -794,9 +1222,14 @@ static int run_benchmarks_cli(int argc, char** argv) {
     const std::unordered_map<std::string, Benchmark> REGISTRY = {
         {"max-inv",                     {max_inv,                       true}},
         {"opposite-signs",              {opposite_signs,                true}},
+        {"opposite-signs-diff",         {opposite_signs_diff,           true}},
+        {"opposite-signs-diff2",        {opposite_signs_diff2,          true}},
         {"abs-ge",                      {abs_ge,                        true}},
         {"cond-negate",                 {cond_negate,                   true}},
+        {"cond-negate-diff",            {cond_negate_diff,              true}},
         {"swap",                        {swap,                          true}},
+        {"turn-off-rm1",                {turn_off_rm1,                  true}},
+        {"turn-on-lsb",                 {turn_on_lsb,                   true}},
         {"max-inv-concat",              {max_inv_concat,                true}},
         {"opposite-signs-concat",       {opposite_signs_concat,         true}},
         {"cond-negate-concat",          {cond_negate_concat,            true}},
