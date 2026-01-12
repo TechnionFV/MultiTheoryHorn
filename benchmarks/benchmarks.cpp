@@ -445,6 +445,91 @@ check_result abs_ge(unsigned int size, bool is_multi) {
 }
 // ========================== [abs-ge] =========================
 
+// ========================= [abs-sum] =========================
+// sign benchmark
+check_result abs_sum(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr i = c.bv_const("i", size);
+    
+    // Rules
+    // x > 0, y > 0 --> p(x,-y,0,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, implies((x > c.bv_val(0,size)) && (y > c.bv_val(0,size)), p(x,-y,c.bv_val(0,size),c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,i), i < x --> p(x,y,a+1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, a, i, implies(p(x,y,a,i) && (i < x), p(x,y,a+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,i), !(i < x) --> q(x,y,a,0)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, a, i, implies(p(x,y,a,i) && !(i < x), q(x,y,a,c.bv_val(0,size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(x,y,a,i), i > y --> q(x,y,a-1,i-1)
+    // fragment: IA[size]
+    expr rule4 = forall(x, y, a, i, implies(q(x,y,a,i) && (i > y), q(x,y,a-c.bv_val(1,size),i-c.bv_val(1,size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // q(x,y,a,i), !(i > y) --> r(x,y,a)
+    // fragment: IA[size]
+    expr rule5 = forall(x, y, a, i, implies(q(x,y,a,i) && !(i > y), r(x,y,a)));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(x,y,a), (a >= 0), !(|x| >= |y|) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(x);
+    query_vars.push_back(y);
+    query_vars.push_back(a);
+    expr query_pred = r(x,y,a);
+    expr bad_phi = (a >= 0) && !(((c.bv_val(1,size) | ite(x >= 0, c.bv_val(0,size), c.bv_val(-1,size))) * x) >= ((c.bv_val(1,size) | ite(y >= 0, c.bv_val(0,size), c.bv_val(-1,size))) * y));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ========================= [abs-sum] =========================
+
 // ======================= [cond-negate] =======================
 // signed benchmark
 check_result cond_negate(unsigned int size, bool is_multi) {
@@ -695,6 +780,97 @@ check_result swap(unsigned int size, bool is_multi) {
     return result;
 }
 // =========================== [swap] ==========================
+
+// ========================= [swap_sum] ========================
+// unsigned benchmark
+check_result swap_sum(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_sort, bv_sort, bool_sort);
+
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr y1 = c.bv_const("y1", size);
+    expr a = c.bv_const("a", size);
+    expr a1 = c.bv_const("a1", size);
+    expr i = c.bv_const("i", size);
+
+    // Rules
+    // ule(y, MAX - x) --> p(x,y,0,0)
+    // fragment: IA[size]
+    int64_t max_int = (uint64_t)1 << size;
+    expr max_bv = c.bv_val(max_int - 1, size);
+    //OUT() << max_bv << std::endl;
+    expr rule1 = forall(x, y, implies(ule(y, max_bv - x), p(x,y,c.bv_val(0,size),c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,i), ult(i,x) --> p(x,y,a+1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, a, i, implies(p(x,y,a,i) && ult(i,x), p(x,y,a+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,i), !(i < x) --> q(y,a,0)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, a, i, implies(p(x,y,a,i) && !ult(i,x), q(x,y,c.bv_val(0,size))));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a,i), i < y --> q(y,a+1,i+1)
+    // fragment: IA[size]
+    expr rule4 = forall(y, a, i, implies(q(y,a,i) && ult(i,y), q(y,a+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // q(y,a,i), !(i < y) --> r(y,a)
+    // fragment: IA[size]
+    expr rule5 = forall(y, a, i, implies(q(y,a,i) && !ult(i,y), r(y,a)));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(y,a), y1 = y ^ a, a1 = a ^ y1, !uge(y1^a1, a1) --> false 
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(y);
+    query_vars.push_back(a);
+    query_vars.push_back(y1);
+    query_vars.push_back(a1);
+    expr query_pred = r(y, a);
+    expr bad_phi = (y1 == (y ^ a)) && (a1 == (a ^ y1)) && !uge((y1 ^ a1), a1);
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: r^{size} --> r
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ========================= [swap_sum] ========================
 
 // ======================= [turn-off-rm1] ======================
 // unsigned benchmark
@@ -953,7 +1129,6 @@ check_result max_inv_concat(unsigned int size, bool is_multi) {
     
     return result;
 }
-
 // ====================== [max-inv-concat] =====================
 
 // ================== [opposite-signs-concat] ==================
@@ -1063,6 +1238,106 @@ check_result opposite_signs_concat(unsigned int size, bool is_multi) {
     return result;
 }
 // ================== [opposite-signs-concat] ==================
+
+// ======================== [abs-concat] =======================
+// signed benchmark
+check_result abs_concat(unsigned int size, bool is_multi) {
+    context c;
+    fixedpoint fp(c);
+
+    unsigned int plus1_size = size + 1;
+
+    // Declare sorts
+    sort bv_sort = c.bv_sort(size);
+    sort bv_plus1_sort = c.bv_sort(plus1_size);
+    sort bool_sort = c.bool_sort();
+
+    // Declare relations
+    func_decl p = function("p", bv_sort, bv_sort, bv_sort, bv_sort, bool_sort);
+    func_decl q = function("q", bv_sort, bv_sort, bool_sort);
+    func_decl r = function("r", bv_plus1_sort, bv_plus1_sort, bv_plus1_sort, bv_plus1_sort, bool_sort);
+    func_decl s = function("s", bv_plus1_sort, bv_plus1_sort, bool_sort);
+    
+    // Register them with the fixedpoint engine (required)
+    fp.register_relation(p);
+    fp.register_relation(q);
+    fp.register_relation(r);
+    fp.register_relation(s);
+
+    params param = get_bv_params(c);
+    fp.set(param);
+
+    // Variables
+    expr x = c.bv_const("x", size);
+    expr y = c.bv_const("y", size);
+    expr a = c.bv_const("a", size);
+    expr i = c.bv_const("i", size);
+
+    expr y2 = c.bv_const("y2",plus1_size);
+    expr a2 = c.bv_const("a2",plus1_size);
+    expr b2 = c.bv_const("b2",plus1_size);
+    expr i2 = c.bv_const("i2",plus1_size);
+
+    // Rules
+    // x > y, y > 0 --> p(x,y,0,0)
+    // fragment: IA[size]
+    expr rule1 = forall(x, y, implies((x > y) && (y > c.bv_val(0,size)), p(x,y,c.bv_val(0,size),c.bv_val(0,size))));
+    symbol name1 = c.str_symbol("rule1");
+    fp.add_rule(rule1, name1);
+
+    // p(x,y,a,i), i < x --> p(x,y,a+1,i+1)
+    // fragment: IA[size]
+    expr rule2 = forall(x, y, a, i, implies(p(x,y,a,i) && (i < x), p(x,y,a+c.bv_val(1,size),i+c.bv_val(1,size))));
+    symbol name2 = c.str_symbol("rule2");
+    fp.add_rule(rule2, name2);
+
+    // p(x,y,a,i), !(i < x) --> q(y,a)
+    // fragment: IA[size]
+    expr rule3 = forall(x, y, a, i, implies(p(x,y,a,i) && !(i < x), q(y,a)));
+    symbol name3 = c.str_symbol("rule3");
+    fp.add_rule(rule3, name3);
+
+    // q(y,a), y2=zeroext(1,y), a2=zeroext(1,a) --> r(y2,a2,0,0)
+    // fragment: BV
+    expr rule4 = forall(y, a, y2, a2, implies(q(y,a) && (y2 == zext(y,1)) && (a2 == zext(a,1)), r(y2,a2,c.bv_val(0,plus1_size),c.bv_val(0,plus1_size))));
+    symbol name4 = c.str_symbol("rule4");
+    fp.add_rule(rule4, name4);
+
+    // r(y2,a2,b2,i2), i2 < y2 --> r(y2,a2,b2-1,i2+1)
+    // fragment: IA[size + 1]
+    expr rule5 = forall(y2, a2, b2, i2, implies(r(y2, a2, b2, i2) && (i2 < y2), r(y2,a2,b2-c.bv_val(1,plus1_size),i2+c.bv_val(1,plus1_size))));
+    symbol name5 = c.str_symbol("rule5");
+    fp.add_rule(rule5, name5);
+
+    // r(y2,a2,b2,i2), !(i2 < y2) --> s(a2,b2)
+    // fragment: IA[size + 1]
+    expr rule6 = forall(y2, a2, b2, i2, implies(r(y2, a2, b2, i2) && !(i2 < y2), s(a2,b2)));
+    symbol name6 = c.str_symbol("rule6");
+    fp.add_rule(rule6, name6);
+
+    // s(a2,b2), !(|a2| > |b2|) --> false
+    // fragment: BV
+    expr_vector query_vars(c);
+    query_vars.push_back(a2);
+    query_vars.push_back(b2);
+    expr query_pred = s(a2,b2);
+    expr bad_phi = !(((c.bv_val(1,plus1_size) | ite(a2 >= 0, c.bv_val(0,plus1_size), c.bv_val(-1,plus1_size))) * a2) > ((c.bv_val(1,plus1_size) | ite(b2 >= 0, c.bv_val(0,plus1_size), c.bv_val(-1,plus1_size))) * b2));
+
+    check_result result = check_result::unknown;
+    
+    if (is_multi) {
+        // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
+        MT_fixedpoint mtfp(c);
+        mtfp.from_solver(fp);
+        result = mtfp.query(query_vars, query_pred, bad_phi); 
+    } else { // bv only
+        expr query = exists(query_vars, query_pred && bad_phi);
+        result = fp.query(query);
+    }
+    
+    return result;
+}
+// ======================== [abs-concat] =======================
 
 // ==================== [cond-negate-concat] ===================
 // signed benchmark
@@ -1225,13 +1500,16 @@ static int run_benchmarks_cli(int argc, char** argv) {
         {"opposite-signs-diff",         {opposite_signs_diff,           true}},
         {"opposite-signs-diff2",        {opposite_signs_diff2,          true}},
         {"abs-ge",                      {abs_ge,                        true}},
+        {"abs-sum",                     {abs_sum,                       true}},
         {"cond-negate",                 {cond_negate,                   true}},
         {"cond-negate-diff",            {cond_negate_diff,              true}},
         {"swap",                        {swap,                          true}},
+        {"swap-sum",                    {swap_sum,                      true}},
         {"turn-off-rm1",                {turn_off_rm1,                  true}},
         {"turn-on-lsb",                 {turn_on_lsb,                   true}},
         {"max-inv-concat",              {max_inv_concat,                true}},
         {"opposite-signs-concat",       {opposite_signs_concat,         true}},
+        {"abs-concat",                  {abs_concat,                    true}},
         {"cond-negate-concat",          {cond_negate_concat,            true}},
     };
 
