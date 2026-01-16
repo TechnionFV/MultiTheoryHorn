@@ -94,20 +94,24 @@ namespace multi_theory_horn {
             compare_func_decl
         >;
 
-        std::map<z3::func_decl, z3::expr_vector, compare_func_decl> srcVarMap;
         std::map<z3::func_decl, z3::expr_vector, compare_func_decl> dstVarMap;
         Map Theta;
 
     public:
-        void insert(z3::expr& p1, z3::expr& p2) {
-            // The interface constraint is p1 -> p2
-            // The key is the destination predicate p2 because of the
-            // assumption that each predicate has at most one predecessor
-            assert(Theta.find(p2.decl()) == Theta.end() && 
+        // The interface constraint is p1 -> p2
+        // The key is the destination predicate p2 because of the
+        // assumption that each predicate has at most one predecessor
+        // Return true if insertion happened, false if p2 -> p1 already exists.
+        bool insert(z3::expr& p1, z3::expr& p2) {
+            auto it = Theta.find(p2.decl());
+            // If p2 -> p1 is already in the map, do nothing
+            if (it != Theta.end() && z3::eq(it->second, p1))
+                return false;
+            assert(it == Theta.end() && 
                 "PredicateMap: first predicate is already mapped");
             Theta.emplace(p2.decl(), p1);
-            srcVarMap.emplace(p1.decl(), p1.args());
             dstVarMap.emplace(p2.decl(), p2.args());
+            return true;
         }
 
         std::optional<z3::expr> find_pred(const z3::func_decl& dst) const {
@@ -117,24 +121,6 @@ namespace multi_theory_horn {
                 return it->second; // Return the source predicate
             }
             return std::nullopt; // Not found
-        }
-
-        std::optional<z3::func_decl> find_next(const z3::expr& src) const {
-            // Look if there's a key that its value is the src argument
-            //! We assume that there's at most one such key
-            for (const auto& pair : Theta)
-                if (pair.second.decl().id() == src.decl().id())
-                    return pair.first;
-
-            return std::nullopt;
-        }
-
-        z3::expr_vector get_src_vars(const z3::func_decl& src) const {
-            // Get the source variables for a given destination predicate
-            auto it = srcVarMap.find(src);
-            assert(it != srcVarMap.end() && 
-                "PredicateMap: source variables not found for the given predicate");
-            return it->second; // Return the source variables
         }
 
         z3::expr_vector get_dst_vars(const z3::func_decl& dst) const {
@@ -147,6 +133,7 @@ namespace multi_theory_horn {
     };
 
     struct CHC {
+        // TODO: Get rid off vars, create fresh ones.
         z3::expr_vector const vars;
         z3::expr body_preds;
         z3::expr body_formula;
@@ -175,17 +162,29 @@ namespace multi_theory_horn {
     // TODO: Delete this when not needed.
     enum class Theory { IAUF, BV };
 
+    struct MTHSolver {
+        z3::fixedpoint fp_solver;
+        z3::expr query;
+
+        MTHSolver(z3::context& ctx) : fp_solver(ctx), query(ctx) {}
+        z3::expr_vector get_all_clauses() const;
+    };
+
     class MTHFixedpointSet {
     private:
         z3::context& ctx;
         
         // Tracks the signedness of the entire set
         std::optional<bool> global_is_signed;
-        std::optional<z3::fixedpoint> bv_solver;
-        std::map<unsigned, z3::fixedpoint> iauf_solvers;
+        std::optional<MTHSolver> bv_solver;
+        std::map<unsigned, MTHSolver> iauf_solvers;
+
+        // Map rule unique ID -> vector of body predicate exprs
+        std::map<unsigned, z3::expr_vector> rule_body_preds_map;
+        // Map rule unique ID -> head predicate expr
+        std::map<unsigned, z3::expr> rule_head_pred_map;
 
         const std::string rule_name = "__mth_rule__";
-        const std::string query_name = "__mth_query__";
         unsigned rule_count = 0;
     public:
         MTHFixedpointSet(z3::context& ctx) : ctx(ctx) {}
@@ -198,19 +197,22 @@ namespace multi_theory_horn {
         // Returns false only if there is a conflict.
         bool check_and_set_signedness(bool incoming_sign);
 
-        std::optional<bool> get_global_signedness() const {
-            return global_is_signed;
-        }
+        std::optional<bool> get_global_signedness() const { return global_is_signed; }
 
         bool hasBVSolver() const;
-        z3::fixedpoint& getOrInitBVSolver();
-        z3::fixedpoint& getBVSolver();
+        MTHSolver& getOrInitBVSolver();
+        MTHSolver& getBVSolver();
 
         bool hasIAUFSolver(unsigned bv_size) const;
-        z3::fixedpoint& getOrInitIAUFSolver(unsigned bv_size);
-        z3::fixedpoint& getIAUFSolver(unsigned bv_size);
+        MTHSolver& getOrInitIAUFSolver(unsigned bv_size);
+        MTHSolver& getIAUFSolver(unsigned bv_size);
+        std::map<unsigned, MTHSolver>& getIAUFSolvers() { return iauf_solvers; }
 
-        z3::symbol get_fresh_rule_name(bool is_query = false);
+        z3::symbol get_fresh_rule_name();
+
+        void populate_predicate_maps_for_clause(const z3::expr clause_expr, bool is_query);
+        std::optional<z3::expr_vector> get_rule_body_preds(const unsigned rule_id) const;
+        std::optional<z3::expr> get_rule_head_pred(const unsigned rule_id) const;
 
         friend std::ostream& operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set);
     };
@@ -263,6 +265,19 @@ namespace multi_theory_horn {
     /// @param clause The CHC clause to extract variables from.
     /// @return An expr_vector containing all the variables of the CHC clause.
     z3::expr_vector get_clause_vars(z3::expr const& clause);
+
+    /// @brief Get the head of the CHC clause. If the clause is a query,
+    /// it returns an empty expression.
+    /// @param clause The CHC clause to extract the head from.
+    /// @param is_query Whether the clause is a query or a rule.
+    /// @return The head of the CHC clause.
+    z3::expr get_clause_head(z3::expr const& clause, bool is_query);
+
+    /// @brief Get the body of the CHC clause.
+    /// @param clause The CHC clause to extract the body from.
+    /// @param is_query Whether the clause is a query or a rule.
+    /// @return The body of the CHC clause.
+    z3::expr get_clause_body(z3::expr const& clause, bool is_query);
 
     /// @brief Analyze the given CHC clause and return the result. We try to infer:
     /// - The signedness of the bit-vector operations in the clause.
