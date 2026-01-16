@@ -218,16 +218,14 @@ namespace multi_theory_horn {
         z3::expr_vector vars = get_clause_vars(clause);
         analyze_vars(vars, result);
 
-        // TODO: Implement query analysis
         if (clause.is_exists()) {
             assert(clause.body().is_and() && "The clause body must be a conjunction");
             z3::expr body = clause.body();
             analyze_query(body, result);
         }
         else if (clause.is_forall()) {
-            assert(clause.body().is_implies() && "The clause body must be an implication");
-            z3::expr body = clause.body().arg(0);
-            z3::expr head = clause.body().arg(1);
+            z3::expr body = get_clause_body(clause, /*is_query*/ false);
+            z3::expr head = get_clause_head(clause, /*is_query*/ false);
 
             // Theoretically, a query can be a forall clause that implies false.
             // Implement only if needed.
@@ -242,6 +240,38 @@ namespace multi_theory_horn {
         }
 
         return result;
+    }
+
+    z3::expr get_clause_head(z3::expr const& clause, bool is_query) {
+        if (is_query) {
+            assert(clause.is_quantifier() && clause.is_exists() && "The clause must be an exists quantifier");
+            assert(clause.body().is_and() && "The clause body must be a conjunction");
+            // Queries do not have heads
+            return z3::expr(clause.ctx());
+        }
+        assert(clause.is_quantifier() && clause.is_forall() && "The clause must be a forall quantifier");
+        assert(clause.body().is_implies() && "The clause body must be an implication");
+        return clause.body().arg(1);
+    }
+
+    z3::expr get_clause_body(z3::expr const& clause, bool is_query) {
+        if (is_query) {
+            assert(clause.is_quantifier() && clause.is_exists() && "The clause must be an exists quantifier");
+            assert(clause.body().is_and() && "The clause body must be a conjunction");
+            return clause.body();
+        }
+        assert(clause.is_quantifier() && "The clause must be a quantifier");
+        assert(clause.body().is_implies() && "The clause body must be an implication");
+        return clause.body().arg(0);
+    }
+    // ====================================================================
+    // MTHSolver methods
+    // ====================================================================
+    z3::expr_vector MTHSolver::get_all_clauses() const {
+        z3::expr_vector clauses = fp_solver.rules();
+        if (query)
+            clauses.push_back(query);
+        return clauses;
     }
 
     // ====================================================================
@@ -259,13 +289,13 @@ namespace multi_theory_horn {
         return bv_solver.has_value();
     }
 
-    z3::fixedpoint& MTHFixedpointSet::getOrInitBVSolver() {
+    MTHSolver& MTHFixedpointSet::getOrInitBVSolver() {
         if (!bv_solver.has_value())
-            bv_solver.emplace(ctx);
+            bv_solver.emplace(MTHSolver(ctx));
         return *bv_solver;
     }
 
-    z3::fixedpoint& MTHFixedpointSet::getBVSolver() {
+    MTHSolver& MTHFixedpointSet::getBVSolver() {
         assert(bv_solver.has_value() && 
             "BV Solver not found.");
         return *bv_solver;
@@ -275,11 +305,11 @@ namespace multi_theory_horn {
         return iauf_solvers.find(bv_size) != iauf_solvers.end();
     }
 
-    z3::fixedpoint& MTHFixedpointSet::getOrInitIAUFSolver(unsigned bv_size) {
+    MTHSolver& MTHFixedpointSet::getOrInitIAUFSolver(unsigned bv_size) {
         auto it = iauf_solvers.find(bv_size);
         if (it != iauf_solvers.end())
             return it->second;
-        
+
         auto result = iauf_solvers.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(bv_size),
@@ -289,17 +319,49 @@ namespace multi_theory_horn {
         return result.first->second;
     }
 
-    z3::fixedpoint& MTHFixedpointSet::getIAUFSolver(unsigned bv_size) {
+    MTHSolver& MTHFixedpointSet::getIAUFSolver(unsigned bv_size) {
         auto it = iauf_solvers.find(bv_size);
         assert(it != iauf_solvers.end() && "IAUF Solver not found for the requested bv_size.");
         return it->second;
     }
 
-    z3::symbol MTHFixedpointSet::get_fresh_rule_name(bool is_query) {
-        std::string name_str = is_query ? query_name : rule_name;
-        name_str += std::to_string(rule_count);
+    z3::symbol MTHFixedpointSet::get_fresh_rule_name() {
+        std::string name_str = rule_name + std::to_string(rule_count);
         rule_count++;
         return ctx.str_symbol(name_str.c_str());
+    }
+
+    void MTHFixedpointSet::populate_predicate_maps_for_clause(const z3::expr clause_expr, bool is_query) {
+        unsigned clause_id = clause_expr.id();
+        z3::expr body = get_clause_body(clause_expr, is_query);
+        z3::expr head = get_clause_head(clause_expr, is_query);
+        z3::expr_vector conjuncts = utils::get_conjuncts(body);
+        z3::expr_vector body_preds(ctx);
+        int conjunct_count = conjuncts.size();
+        for (int i = 0; i < conjunct_count; ++i) {
+            z3::expr conjunct = conjuncts[i];
+            // Check if the conjunct is a predicate application
+            if (utils::is_uninterpreted_predicate(conjunct))
+                body_preds.push_back(conjunct);
+        }
+        rule_body_preds_map.emplace(clause_id, body_preds);
+        rule_head_pred_map.emplace(clause_id, head);
+    }
+
+    std::optional<z3::expr_vector> MTHFixedpointSet::get_rule_body_preds(const unsigned rule_id) const {
+        auto it = rule_body_preds_map.find(rule_id);
+        if (it != rule_body_preds_map.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    std::optional<z3::expr> MTHFixedpointSet::get_rule_head_pred(const unsigned rule_id) const {
+        auto it = rule_head_pred_map.find(rule_id);
+        if (it != rule_head_pred_map.end()) {
+            return it->second;
+        }
+        return std::nullopt;
     }
 
     std::ostream & operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set) {
@@ -311,24 +373,26 @@ namespace multi_theory_horn {
         }
 
         if (mth_fp_set.bv_solver.has_value()) {
-            os << "  BV Solver: Initialized" << std::endl;
-            os << *(mth_fp_set.bv_solver);
+            os << "======== BV Solver (Initialized):" << std::endl;
+            os << (mth_fp_set.bv_solver).value().fp_solver;
+            os << "======== Query: " << std::endl;
+            os << (mth_fp_set.bv_solver).value().query << std::endl;
         } else {
-            os << "  BV Solver: Not Initialized" << std::endl;
+            os << "======== BV Solver (Not Initialized)" << std::endl;
         }
         os << std::endl;
 
-        os << "  IAUF Solvers:" << std::endl;
+        os << "IAUF Solvers:" << std::endl;
         if (mth_fp_set.iauf_solvers.empty()) {
             os << "    None" << std::endl;
         } else {
             for (const auto& [bv_size, solver] : mth_fp_set.iauf_solvers) {
-                os << "    BV Size " << bv_size << ": Initialized" << std::endl;
-                os << solver;
-                os << std::endl;
+                os << "======== BV Size " << bv_size << ": Initialized" << std::endl;
+                os << solver.fp_solver;
+                os << "======== Query: " << std::endl;
+                os << solver.query << std::endl;
             }
         }
-        os << std::endl;
         return os;
     }
 
