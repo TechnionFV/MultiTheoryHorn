@@ -30,13 +30,28 @@ namespace multi_theory_horn {
         return true;
     }
 
+    // Concatenates the bv_size to the name of the given predicate.
+    static std::string create_int_predicate_name(const z3::func_decl& p_old, unsigned bv_size) {
+        return p_old.name().str() + "_" + std::to_string(bv_size);
+    }
+
+    // Extracts the original predicate name by removing the bv_size suffix.
+    static std::string extract_old_bv_predicate_name(const z3::func_decl& p_new, unsigned bv_size) {
+        std::string suffix = "_" +  std::to_string(bv_size);
+        std::string p_name_str = p_new.name().str();
+        assert(p_name_str.size() > suffix.size() &&
+               p_name_str.substr(p_name_str.size() - suffix.size()) == suffix &&
+               "Predicate name does not have the expected suffix");
+        return p_name_str.substr(0, p_name_str.size() - suffix.size());
+    }
+
     // Creates a copy of the given predicate with the same name but with bv_size
     // concatenated to it.
     // The sort and range of the old predicate should be bit-vectors and bool respectively.
     // The new predicate will have int sorts for its arguments.
     static z3::func_decl bv_predicate_to_int(const z3::func_decl& p_old, unsigned bv_size) {
         z3::context& ctx = p_old.ctx();
-        std::string p_name_str = p_old.name().str() + "_" + std::to_string(bv_size);
+        std::string p_name_str = create_int_predicate_name(p_old, bv_size);
         z3::symbol p_name = ctx.str_symbol(p_name_str.c_str());
 
         // Create the new argument sorts
@@ -57,7 +72,7 @@ namespace multi_theory_horn {
         return p_new;
     }
 
-    static VarMap build_bv2int_var_map(z3::context& ctx, z3::expr_vector& bv_vars_exprs, ClauseAnalysisResult& clause_analysis) {
+    static VarMap build_bv2int_var_map(z3::context& ctx, z3::expr_vector& bv_vars_exprs, const ClauseAnalysisResult& clause_analysis) {
         VarMap bv_to_int_var_map;
         for (const z3::expr& var_bv : clause_analysis.all_vars) {
             int var_index = clause_analysis.var_index_map.at(var_bv);
@@ -71,9 +86,10 @@ namespace multi_theory_horn {
     }
     
     static z3::expr translate_BV_CHC_rule(const z3::expr& clause,
-                                          ClauseAnalysisResult& clause_analysis,
-                                          Bv2IntTranslator& translator) {
-        DEBUG_MSG(OUT() << "Translating BV CHC rule: " << clause << std::endl << "With BV to int VarMap:\n"
+                                          const ClauseAnalysisResult& clause_analysis,
+                                          Bv2IntTranslator& translator,
+                                          bool is_query) {
+        DEBUG_MSG(OUT() << "Translating BV CHC clause: " << clause << std::endl << "With BV to int VarMap:\n"
                         << dump(translator.bv2int_var_map()) << std::endl);
         z3::context& ctx = clause.ctx();
         const VarMap& new_vars_map = translator.bv2int_var_map();
@@ -88,13 +104,9 @@ namespace multi_theory_horn {
             new_vars.set(var_index, tmp);
         }
 
-        assert(clause.is_forall() && "Clause must be a forall");
-        z3::expr underlying_clause = clause.body();
-        assert(underlying_clause.is_implies() && "Clause must be an implication");
-        z3::expr body = underlying_clause.arg(0);
-        z3::expr head = underlying_clause.arg(1);
+        z3::expr body = get_clause_body(clause, /*is_query*/ is_query);
+        z3::expr head = get_clause_head(clause, /*is_query*/ is_query);
 
-        // TODO: Maybe inline the following logic in the translator itself.
         int num_conjuncts = utils::get_num_conjuncts(body);
         z3::expr_vector new_conjunct(ctx);
         for (int i = 0; i < num_conjuncts; ++i) {
@@ -130,7 +142,16 @@ namespace multi_theory_horn {
             }
         }
 
+        // Create the new body expression
         z3::expr new_body = z3::mk_and(new_conjunct);
+
+        if (is_query) {
+            z3::expr new_query = z3::exists(new_vars, new_body);
+            DEBUG_MSG(OUT() << "Translated BV (size " << clause_analysis.bv_size << ") CHC query to int CHC query: " << new_query << std::endl);
+            return new_query;
+        }
+
+        // If we're dealing with a normal rule, also translate the head
         z3::expr new_head(ctx);
         assert(utils::is_uninterpreted_predicate(head) && "Head must be an uninterpreted predicate");
         z3::func_decl p_head_new = bv_predicate_to_int(head.decl(), clause_analysis.bv_size);
@@ -141,12 +162,12 @@ namespace multi_theory_horn {
             new_head_args.push_back(translated_arg);
         }
         new_head = p_head_new(new_head_args);
-        z3::expr new_clause = z3::forall(new_vars, z3::implies(new_body, new_head));
-        DEBUG_MSG(OUT() << "Translated BV (size " << clause_analysis.bv_size << ") CHC rule to int CHC rule: " << new_clause << std::endl);
-        return new_clause;
+        z3::expr new_rule = z3::forall(new_vars, z3::implies(new_body, new_head));
+        DEBUG_MSG(OUT() << "Translated BV (size " << clause_analysis.bv_size << ") CHC rule to int CHC rule: " << new_rule << std::endl);
+        return new_rule;
     }
 
-    z3::expr MT_fixedpoint::get_bv_expr_bound(z3::expr_vector const& vars) const {
+    z3::expr MT_fixedpoint::get_bv_expr_bounds(z3::expr_vector const& vars) const {
         unsigned bv_size = m_bv_size;
         bool is_signed = m_is_signed;
 
@@ -195,16 +216,16 @@ namespace multi_theory_horn {
 
     void MT_fixedpoint::add_predicate_fact(z3::func_decl const& key, z3::expr const& head, Theory theory) {
         z3::expr_vector vars = head.args();
-        std::string fact_name_str = kAdded_fact_name + std::to_string(added_fact_counter);
+        std::string fact_name_str = get_fresh_added_fact_name();
         z3::symbol fact_name = m_ctx.str_symbol(fact_name_str.c_str());
         z3::expr added_fact(m_ctx);
         if (theory == Theory::IAUF) {
-            CHC fact(vars, m_ctx.bool_val(true), get_bv_expr_bound(vars), head);
+            CHC fact(vars, m_ctx.bool_val(true), get_bv_expr_bounds(vars), head);
             added_fact = fact.get_rule_expr();
             m_fp_int.add_rule(added_fact, fact_name);
             // Store the fact in the fact map with the head predicate decl AST as the key
             Z3_ast ast = key;
-            p_to_fact_map.emplace(ast, std::make_pair(fact, fact_name));
+            m_p_to_fact_map.emplace(ast, std::make_pair(fact, fact_name));
         }
         else if (theory == Theory::BV) {
             CHC fact(vars, m_ctx.bool_val(true), m_ctx.bool_val(true), head);
@@ -212,10 +233,14 @@ namespace multi_theory_horn {
             m_fp_bv.add_rule(added_fact, fact_name);
             // Store the fact in the fact map with the head predicate decl AST as the key
             Z3_ast ast = key;
-            p_to_fact_map.emplace(ast, std::make_pair(fact, fact_name));
+            m_p_to_fact_map.emplace(ast, std::make_pair(fact, fact_name));
         }
         else
             ASSERT_FALSE("Invalid theory for predicate fact addition");
+    }
+
+    std::string MT_fixedpoint::get_fresh_added_fact_name() {
+        return kAdded_fact_name + std::to_string(added_fact_counter++);
     }
 
     void MT_fixedpoint::add_variable_map(z3::expr_vector bv_vars, z3::expr_vector int_vars) {
@@ -253,7 +278,7 @@ namespace multi_theory_horn {
         }
     }
 
-    void MT_fixedpoint::populate_MTH_fixedpoint_engines() {
+    void MT_fixedpoint::populate_MTH_fixedpoint_engines(z3::expr const& query, ClauseAnalysisResult const& query_analysis) {
         // After making sure that signedness is consistent within each clause,
         // and between clauses, we make a final check to see if the signedness
         // is determined ("known") globally. If not, we cannot proceed.
@@ -268,7 +293,8 @@ namespace multi_theory_horn {
 
             if (clause_analysis.has_bit_manipulating_apps ||
                 !clause_analysis.is_bv_size_determined()) {
-                m_mth_fp_set.getOrInitBVSolver().add_rule(clause, name);
+                m_mth_fp_set.getOrInitBVSolver().fp_solver.add_rule(clause, name);
+                m_mth_fp_set.populate_predicate_maps_for_clause(clause, /*is_query*/ false);
             }
             else {
                 // Bv size is determined and there are no bit-manipulating apps
@@ -277,8 +303,123 @@ namespace multi_theory_horn {
                 VarMap bv_to_int_var_map = build_bv2int_var_map(m_ctx, bv_vars_exprs, clause_analysis);
                 // Initialize a translator with no_overflow guarantee
                 Bv2IntTranslator translator(m_ctx, is_signed, bv_size, /*simplify*/ true, /*no_overflow*/ true, bv_to_int_var_map);
-                z3::expr int_clause = translate_BV_CHC_rule(clause, clause_analysis, translator);
-                m_mth_fp_set.getOrInitIAUFSolver(bv_size).add_rule(int_clause, name);
+                z3::expr int_clause = translate_BV_CHC_rule(clause, clause_analysis, translator, /*is_query*/ false);
+                m_mth_fp_set.getOrInitIAUFSolver(bv_size).fp_solver.add_rule(int_clause, name);
+                m_mth_fp_set.populate_predicate_maps_for_clause(int_clause, /*is_query*/ false);
+            }
+        }
+
+        // Finally, add the query to the appropriate fixedpoint engine
+        if (query_analysis.has_bit_manipulating_apps ||
+            !query_analysis.is_bv_size_determined()) {
+            m_mth_fp_set.getOrInitBVSolver().query = query;
+            m_mth_fp_set.populate_predicate_maps_for_clause(query, /*is_query*/ true);
+        }
+        else {
+            // Bv size is determined and there are no bit-manipulating apps
+            unsigned bv_size = query_analysis.bv_size;
+            z3::expr_vector bv_vars_exprs = get_clause_vars(query);
+            VarMap bv_to_int_var_map = build_bv2int_var_map(m_ctx, bv_vars_exprs, query_analysis);
+            // Initialize a translator with no_overflow guarantee
+            Bv2IntTranslator translator(m_ctx, is_signed, bv_size, /*simplify*/ true, /*no_overflow*/ true, bv_to_int_var_map);
+            z3::expr int_query = translate_BV_CHC_rule(query, query_analysis, translator, /*is_query*/ true);
+            m_mth_fp_set.getOrInitIAUFSolver(bv_size).query = int_query;
+            m_mth_fp_set.populate_predicate_maps_for_clause(int_query, /*is_query*/ true);
+        }
+    }
+
+    void MT_fixedpoint::add_predicate_fact(z3::func_decl const& src_decl, z3::expr const& dst_expr,
+                                           z3::fixedpoint& dst_fp, bool is_dst_int) {
+        // Create fresh varriables according to dst_expr's sort
+        z3::expr_vector vars(m_ctx);
+        for (unsigned i = 0; i < dst_expr.num_args(); ++i) {
+            z3::sort arg_sort = dst_expr.arg(i).get_sort();
+            std::string var_name = "v_" + std::to_string(i);
+            z3::expr var = m_ctx.constant(var_name.c_str(), arg_sort);
+            vars.push_back(var);
+        }
+        z3::expr dst_new = dst_expr.decl()(vars);
+        std::string fact_name_str = get_fresh_added_fact_name();
+        z3::symbol fact_name = m_ctx.str_symbol(fact_name_str.c_str());
+        z3::expr bound_expr = m_ctx.bool_val(true);
+        if (is_dst_int)
+            bound_expr = get_bv_expr_bounds(vars);
+        CHC fact(vars, m_ctx.bool_val(true), bound_expr, dst_new);
+        z3::expr added_fact(m_ctx);
+        added_fact = fact.get_rule_expr();
+        dst_fp.add_rule(added_fact, fact_name);
+
+        // Store the fact in the fact map with the head predicate decl AST as the key
+        m_interface_dst_fact_map.emplace(src_decl, std::make_pair(fact, fact_name));
+    }
+
+    void MT_fixedpoint::add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, z3::fixedpoint& fp2, bool is_dst_int) {
+        if (!m_interface_constraint_map.insert(p1_expr, p2_expr))
+            return;
+        DEBUG_MSG(OUT() << "Adding interface constraint: " 
+            << p1_expr << " ------> " << p2_expr << std::endl);
+        m_interface_src_strengthening_map.emplace(p2_expr.decl(), m_ctx.bool_val(true));
+        add_predicate_fact(p1_expr.decl(), p2_expr, fp2, is_dst_int);
+    }
+
+    void MT_fixedpoint::generate_interface_constraints() {
+        if (!m_mth_fp_set.hasBVSolver())
+            return;
+
+        // Go over all IAUF solvers and their rules
+        for (auto& [bv_size, iauf_solver] : m_mth_fp_set.getIAUFSolvers()) {
+            for (const auto& clause : iauf_solver.get_all_clauses()) {
+                unsigned clause_id = clause.id();
+                std::optional<z3::expr> clause_head_pred_or_fail = m_mth_fp_set.get_rule_head_pred(clause_id);
+                std::optional<z3::expr_vector> clause_body_preds_or_fail = m_mth_fp_set.get_rule_body_preds(clause_id);
+                assert(clause_head_pred_or_fail.has_value() == clause_body_preds_or_fail.has_value() &&
+                       "Inconsistent presence of int clause head and body predicates");
+                if (!clause_head_pred_or_fail && !clause_body_preds_or_fail) {
+                    // It means the clause is freshly added clause.
+                    continue;
+                }
+                z3::expr clause_head_pred = clause_head_pred_or_fail.value();
+                z3::expr_vector clause_body_preds = clause_body_preds_or_fail.value();
+
+                for (const auto& bv_clause : m_mth_fp_set.getBVSolver().get_all_clauses()) {
+                    unsigned bv_clause_id = bv_clause.id();
+                    std::optional<z3::expr> bv_clause_head_pred_or_fail = m_mth_fp_set.get_rule_head_pred(bv_clause_id);
+                    std::optional<z3::expr_vector> bv_clause_body_preds_or_fail = m_mth_fp_set.get_rule_body_preds(bv_clause_id);
+                    assert(bv_clause_head_pred_or_fail.has_value() == bv_clause_body_preds_or_fail.has_value() &&
+                           "Inconsistent presence of bv clause head and body predicates");
+                    if (!bv_clause_head_pred_or_fail && !bv_clause_body_preds_or_fail) {
+                        // It means the clause is freshly added clause.
+                        continue;
+                    }
+                    z3::expr bv_clause_head_pred = bv_clause_head_pred_or_fail.value();
+                    z3::expr_vector bv_clause_body_preds = bv_clause_body_preds_or_fail.value();
+
+                    // Check for BV -> INT interface constraints
+                    if (bool(bv_clause_head_pred) && !clause_body_preds.empty()) {
+                        std::string bv_pred_head_name = bv_clause_head_pred.decl().name().str();
+                        for (const z3::expr& body_pred : clause_body_preds) {
+                            std::string body_pred_name = extract_old_bv_predicate_name(body_pred.decl(), bv_size);
+                            if (bv_pred_head_name == body_pred_name) {
+                                // Found a BV -> INT interface constraint
+                                add_interface_constraint(bv_clause_head_pred, body_pred,
+                                                         iauf_solver.fp_solver, /*is_dst_int=*/ true);
+                            }
+                        }
+                    }
+
+                    // Check for INT -> BV interface constraints
+                    if (bool(clause_head_pred) && !bv_clause_body_preds.empty()) {
+                        std::string int_pred_head_name = extract_old_bv_predicate_name(clause_head_pred.decl(), bv_size);
+                        for (const z3::expr& bv_body_pred : bv_clause_body_preds) {
+                            std::string bv_body_pred_name = bv_body_pred.decl().name().str();
+                            if (int_pred_head_name == bv_body_pred_name) {
+                                // Found an INT -> BV interface constraint
+                                add_interface_constraint(clause_head_pred, bv_body_pred,
+                                                         m_mth_fp_set.getBVSolver().fp_solver, /*is_dst_int=*/ false);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -353,12 +494,12 @@ namespace multi_theory_horn {
     void MT_fixedpoint::add_interface_constraint(z3::expr p1_expr, Theory theory_1, 
                                                  z3::expr p2_expr, Theory theory_2) {
         if (theory_1 == Theory::IAUF && theory_2 == Theory::BV) {
-            m_int2bv_map.insert(p1_expr, p2_expr);
+            std::ignore = m_int2bv_map.insert(p1_expr, p2_expr);
             // Map the variables to allow translation between the two theories
             add_variable_map(p2_expr.args(), p1_expr.args());
         }
         else if (theory_1 == Theory::BV && theory_2 == Theory::IAUF) {
-            m_bv2int_map.insert(p1_expr, p2_expr);
+            std::ignore = m_bv2int_map.insert(p1_expr, p2_expr);
             // Map the variables to allow translation between the two theories
             add_variable_map(p1_expr.args(), p2_expr.args());
         }
@@ -370,20 +511,25 @@ namespace multi_theory_horn {
             << p1_expr << " ------> " << p2_expr << std::endl);
         
         // Initialize the strengthening expression of the source predicate to true
-        p_to_strengthening_expr_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
+        m_p_to_strengthening_expr_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
 
         add_predicate_fact(p1_expr.decl(), p2_expr, theory_2);
     }
 
     z3::check_result MT_fixedpoint::query(z3::expr& query) {
         DEBUG_MSG(OUT() << "Analyzing query:\n" << query << std::endl);
-        ClauseAnalysisResult clause_analysis = analyze_clause(m_ctx, query);
-        DEBUG_MSG(OUT() << clause_analysis);
-        check_signedness_consistency(clause_analysis);
-        populate_MTH_fixedpoint_engines();
+        ClauseAnalysisResult query_analysis = analyze_clause(m_ctx, query);
+        DEBUG_MSG(OUT() << query_analysis);
+        check_signedness_consistency(query_analysis);
+        populate_MTH_fixedpoint_engines(query, query_analysis);
         DEBUG_MSG(OUT() << "The set of solvers after population:\n" << m_mth_fp_set << std::endl);
         
+        // Generate interface constraints
+        generate_interface_constraints();
+        DEBUG_MSG(OUT() << "The set of solvers after interface constraint generation:\n" << m_mth_fp_set << std::endl);
+
         // TODO: Implement the query logic
+        // TODO: Deal with the case where there is no BV solver.
         NOT_IMPLEMENTED();
     }
 
@@ -443,16 +589,16 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
-                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
-                        assert(st_it != p_to_strengthening_expr_map.end());
+                        auto st_it = m_p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != m_p_to_strengthening_expr_map.end());
                         if (!p_interp.is_true())
                             st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
                         //! We assume at most one fact is registered for each predicate
-                        auto it = p_to_fact_map.find(key);
-                        assert(it != p_to_fact_map.end() && "Fact not found in the map");
+                        auto it = m_p_to_fact_map.find(key);
+                        assert(it != m_p_to_fact_map.end() && "Fact not found in the map");
                         CHCFactConfig* fact_config = &it->second; // get the config
                         z3::symbol fact_name = fact_config->second; // get CHC fact name
                         DEBUG_MSG(OUT() << "Fact name: " << fact_name << std::endl);
@@ -485,16 +631,16 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << int_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
-                        auto st_it = p_to_strengthening_expr_map.find(p_decl);
-                        assert(st_it != p_to_strengthening_expr_map.end());
+                        auto st_it = m_p_to_strengthening_expr_map.find(p_decl);
+                        assert(st_it != m_p_to_strengthening_expr_map.end());
                         if (!p_interp.is_true())
                             st_it->second = st_it->second && p_interp;
 
                         // Get all info
                         Z3_ast key = p_decl;
                         //! We assume at most one fact is registered for each predicate
-                        auto it = p_to_fact_map.find(key);
-                        assert(it != p_to_fact_map.end() && "Fact not found in the map");
+                        auto it = m_p_to_fact_map.find(key);
+                        assert(it != m_p_to_fact_map.end() && "Fact not found in the map");
                         CHCFactConfig* fact_config = &it->second; // get the config
                         z3::symbol fact_name = fact_config->second; // get CHC fact name
                         DEBUG_MSG(OUT() << "Fact name: " << fact_name << std::endl);
@@ -543,8 +689,8 @@ namespace multi_theory_horn {
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(OUT() << "q' (with translated vars) = " << q_tag_new << std::endl);
 
-                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
-                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+                        auto st_it = m_p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != m_p_to_strengthening_expr_map.end() && "Strengthening expression not found");
                         z3::expr query_phi = phi_trans || !(st_it->second);
 
                         S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
@@ -587,9 +733,9 @@ namespace multi_theory_horn {
                         
                         z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
                         DEBUG_MSG(OUT() << "q' (with translated vars) = " << q_tag_new << std::endl);
-                        
-                        auto st_it = p_to_strengthening_expr_map.find(q_tag.value().decl());
-                        assert(st_it != p_to_strengthening_expr_map.end() && "Strengthening expression not found");
+
+                        auto st_it = m_p_to_strengthening_expr_map.find(q_tag.value().decl());
+                        assert(st_it != m_p_to_strengthening_expr_map.end() && "Strengthening expression not found");
                         z3::expr query_phi = phi_trans || !(st_it->second);
 
                         S.push(QueryConfig(translated_vars, q_tag_new, query_phi, next_theory));
