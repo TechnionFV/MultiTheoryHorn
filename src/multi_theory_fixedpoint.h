@@ -19,6 +19,13 @@ namespace multi_theory_horn {
         MTHFixedpointSet m_mth_fp_set;
         z3::expr_vector m_original_clauses;
         std::map<z3::expr, ClauseAnalysisResult, compare_expr> m_clause_analysis_map;
+        PredicateMap m_interface_constraint_map;
+
+        using PredicateToExprMap = std::map<z3::func_decl, z3::expr, compare_func_decl>;
+        using CHCFactConfig = std::pair<CHC, z3::symbol>;
+        using PredicateToCHCConfigMap = std::map<z3::func_decl, CHCFactConfig, compare_func_decl>;
+        PredicateToExprMap m_interface_src_strengthening_map;
+        PredicateToCHCConfigMap m_interface_dst_fact_map;
 
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
@@ -30,21 +37,13 @@ namespace multi_theory_horn {
         PredicateMap m_int2bv_map;
         PredicateMap m_bv2int_map;
 
-        VarMap m_int2bv_var_map;
-        VarMap m_bv2int_var_map;
-
-        using CHCFactConfig = std::pair<CHC, z3::symbol>;
-        std::unordered_map<Z3_ast, CHCFactConfig, AstHash, AstEq> p_to_fact_map;
-        std::map<z3::func_decl, z3::expr, compare_func_decl> p_to_strengthening_expr_map;
+        std::unordered_map<Z3_ast, CHCFactConfig, AstHash, AstEq> m_p_to_fact_map;
+        std::map<z3::func_decl, z3::expr, compare_func_decl> m_p_to_strengthening_expr_map;
 
         std::string kAdded_fact_name = "__added_fact__";
         unsigned added_fact_counter = 0;
 
-        /// @brief Adds a bi-directional mapping between sets of variables
-        /// @param bv_vars BV set of variables
-        /// @param int_vars integer set of variables
-        /// @note This method assumes the variables are sorted and of the same size.
-        void add_variable_map(z3::expr_vector bv_vars, z3::expr_vector int_vars);
+        std::string get_fresh_added_fact_name();
 
         /// @brief A method that finds the leaf predicate of a refutation.
         /// @param refutation The refutation expression to analyze.
@@ -78,7 +77,28 @@ namespace multi_theory_horn {
         /// This includes going over the original clauses, their analysis results,
         /// and adding them to the appropriate fixedpoint engine after translation
         /// if necessary.
-        void populate_MTH_fixedpoint_engines();
+        /// @param query The query expression.
+        /// @param query_analysis The analysis result of the query.
+        void populate_MTH_fixedpoint_engines(const z3::expr& query, 
+                                             ClauseAnalysisResult const& query_analysis);
+
+        /// @brief Adds a behind the scenes fact corresponding to the predicate given by p_expr
+        /// which is the destination of an interface constraint.
+        /// @param src_decl The key func_decl of the source predicate.
+        /// @param dst_expr The fact's head (the destination predicate of the interface constraint).
+        /// @param dst_fp The fixedpoint engine of the destination predicate.
+        void add_predicate_fact(z3::func_decl const& src_decl, z3::expr const& dst_expr, z3::fixedpoint& dst_fp);
+        
+        /// @brief Adds an interface constraint (mapping) between two predicates
+        /// in different theories.
+        /// @param p1_expr The source predicate.
+        /// @param p2_expr The target predicate.
+        /// @param fp2 The solver of the target to which we add a fact.
+        void add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, z3::fixedpoint& fp2);
+
+        /// @brief Generates all needed interface constraints between all
+        /// populated fixedpoint engines.
+        void generate_interface_constraints();
 
     public:
 
