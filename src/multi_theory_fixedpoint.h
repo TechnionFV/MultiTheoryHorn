@@ -37,9 +37,6 @@ namespace multi_theory_horn {
         PredicateMap m_int2bv_map;
         PredicateMap m_bv2int_map;
 
-        // TODO: Check if it's possible to delete these maps
-        VarMap m_int2bv_var_map;
-        VarMap m_bv2int_var_map;
         std::unordered_map<Z3_ast, CHCFactConfig, AstHash, AstEq> m_p_to_fact_map;
         std::map<z3::func_decl, z3::expr, compare_func_decl> m_p_to_strengthening_expr_map;
 
@@ -47,12 +44,6 @@ namespace multi_theory_horn {
         unsigned added_fact_counter = 0;
 
         std::string get_fresh_added_fact_name();
-
-        /// @brief Adds a bi-directional mapping between sets of variables
-        /// @param bv_vars BV set of variables
-        /// @param int_vars integer set of variables
-        /// @note This method assumes the variables are sorted and of the same size.
-        void add_variable_map(z3::expr_vector bv_vars, z3::expr_vector int_vars);
 
         /// @brief A method that finds the leaf predicate of a refutation.
         /// @param refutation The refutation expression to analyze.

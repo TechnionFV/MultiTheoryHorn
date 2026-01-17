@@ -243,29 +243,6 @@ namespace multi_theory_horn {
         return kAdded_fact_name + std::to_string(added_fact_counter++);
     }
 
-    void MT_fixedpoint::add_variable_map(z3::expr_vector bv_vars, z3::expr_vector int_vars) {
-        assert(bv_vars.size() == int_vars.size() && "The size of bv_vars and int_vars must be the same");
-        
-        // This is used only to create an assertion
-        [[maybe_unused]] auto arg_is_const = [](const z3::expr& e) {
-            // Checks if e is an argument (an app of arity 0)
-            return e.is_const() && !e.is_numeral();
-        };
-        
-        for (int i = 0; i < bv_vars.size(); ++i) {
-            assert(arg_is_const(bv_vars[i]) && "bv_vars must contain a BV variable");
-            assert(arg_is_const(int_vars[i]) && "int_vars must contain an int variable");
-
-            DEBUG_MSG(OUT() << "Adding variable map: " 
-                << bv_vars[i] << " <-> " << int_vars[i] << std::endl);
-
-            // Insert the int variable into the bv2int_var_map
-            m_bv2int_var_map.emplace(bv_vars[i], int_vars[i]);
-            // Insert the bv variable into the int2bv_var_map
-            m_int2bv_var_map.emplace(int_vars[i], bv_vars[i]);
-        }
-    }
-
     void MT_fixedpoint::check_signedness_consistency(ClauseAnalysisResult const& clause_analysis) {
         if (clause_analysis.has_conflicting_signedness())
             ASSERT_FALSE("Clause has conflicting signedness information");
@@ -495,13 +472,9 @@ namespace multi_theory_horn {
                                                  z3::expr p2_expr, Theory theory_2) {
         if (theory_1 == Theory::IAUF && theory_2 == Theory::BV) {
             std::ignore = m_int2bv_map.insert(p1_expr, p2_expr);
-            // Map the variables to allow translation between the two theories
-            add_variable_map(p2_expr.args(), p1_expr.args());
         }
         else if (theory_1 == Theory::BV && theory_2 == Theory::IAUF) {
             std::ignore = m_bv2int_map.insert(p1_expr, p2_expr);
-            // Map the variables to allow translation between the two theories
-            add_variable_map(p1_expr.args(), p2_expr.args());
         }
         else
             ASSERT_FALSE("theory_1 and theory_2 must be different theories");
