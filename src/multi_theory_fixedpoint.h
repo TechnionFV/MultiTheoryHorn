@@ -26,11 +26,12 @@ namespace multi_theory_horn {
         using PredicateToCHCConfigMap = std::map<z3::func_decl, CHCFactConfig, compare_func_decl>;
         PredicateToExprMap m_interface_src_strengthening_map;
         PredicateToCHCConfigMap m_interface_dst_fact_map;
+        std::map<z3::func_decl, z3::expr_vector, compare_func_decl> m_interface_dst_vars;
 
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
         unsigned m_bv_size;
-        bool m_is_signed; // Whether to treat bit-vectors as signed or unsigned
+        std::optional<bool> m_is_signed; // Whether to treat bit-vectors as signed or unsigned
         bool m_simplify; // Whether to simplify the translations
         bool m_int2bv_preprocess; // Whether to preprocess integer translator formulas
 
@@ -79,17 +80,19 @@ namespace multi_theory_horn {
         /// if necessary.
         /// @param query The query expression.
         /// @param query_analysis The analysis result of the query.
-        void populate_MTH_fixedpoint_engines(const z3::expr& query, 
+        /// @return The appropriate query expression. Could be the original query or
+        /// a translated version depending on the theories involved.
+        z3::expr populate_MTH_fixedpoint_engines(const z3::expr& query, 
                                              ClauseAnalysisResult const& query_analysis);
 
         /// @brief Adds a behind the scenes fact corresponding to the predicate given by p_expr
         /// which is the destination of an interface constraint.
-        /// @param src_decl The key func_decl of the source predicate.
+        /// @param src_expr The key expr of the source predicate.
         /// @param dst_expr The fact's head (the destination predicate of the interface constraint).
         /// @param dst_fp The fixedpoint engine of the destination predicate.
         /// @param is_dst_int Whether the destination theory is integer theory.
         /// If yes, then bound constraints are added to the generated fact.
-        void add_predicate_fact(z3::func_decl const& src_decl, z3::expr const& dst_expr,
+        void add_predicate_fact(z3::expr const& src_expr, z3::expr const& dst_expr,
                                 z3::fixedpoint& dst_fp, bool is_dst_int);
         
         /// @brief Adds an interface constraint (mapping) between two predicates

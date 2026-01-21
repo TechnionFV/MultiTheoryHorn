@@ -105,7 +105,7 @@ namespace multi_theory_horn {
         bool insert(z3::expr& p1, z3::expr& p2) {
             auto it = Theta.find(p2.decl());
             // If p2 -> p1 is already in the map, do nothing
-            if (it != Theta.end() && z3::eq(it->second, p1))
+            if (it != Theta.end() && z3::eq(it->second.decl(), p1.decl()))
                 return false;
             assert(it == Theta.end() && 
                 "PredicateMap: first predicate is already mapped");
@@ -165,9 +165,16 @@ namespace multi_theory_horn {
     struct MTHSolver {
         z3::fixedpoint fp_solver;
         z3::expr query;
+        unsigned bv_size;
+        bool is_bv;
 
-        MTHSolver(z3::context& ctx) : fp_solver(ctx), query(ctx) {}
+        static constexpr unsigned UNDETERMINED_BV_SIZE = 0;
+
+        MTHSolver(z3::context& ctx, bool is_bv, unsigned bv_size = UNDETERMINED_BV_SIZE) : 
+            fp_solver(ctx), query(ctx), is_bv(is_bv), bv_size(bv_size) {}
         z3::expr_vector get_all_clauses() const;
+        bool is_bv_solver() const { return is_bv; }
+        unsigned get_bv_size() const;
     };
 
     class MTHFixedpointSet {
@@ -183,6 +190,10 @@ namespace multi_theory_horn {
         std::map<unsigned, z3::expr_vector> rule_body_preds_map;
         // Map rule unique ID -> head predicate expr
         std::map<unsigned, z3::expr> rule_head_pred_map;
+        // Map rule unique ID -> solver it belongs to
+        std::map<unsigned, MTHSolver*> rule_solver_map;
+        // Map predicate expr ID -> solver it belongs to
+        std::map<z3::func_decl, MTHSolver*, compare_func_decl>pred_solver_map;
 
         const std::string rule_name = "__mth_rule__";
         unsigned rule_count = 0;
@@ -210,9 +221,13 @@ namespace multi_theory_horn {
 
         z3::symbol get_fresh_rule_name();
 
-        void populate_predicate_maps_for_clause(const z3::expr clause_expr, bool is_query);
-        std::optional<z3::expr_vector> get_rule_body_preds(const unsigned rule_id) const;
-        std::optional<z3::expr> get_rule_head_pred(const unsigned rule_id) const;
+        void populate_predicate_maps_for_clause(const z3::expr clause_expr, MTHSolver* solver, bool is_query);
+        std::optional<z3::expr_vector> get_clause_body_preds(const z3::expr& clause) const;
+        std::optional<z3::expr> get_clause_head_pred(const z3::expr& clause) const;
+
+        void map_clause_to_solver(const z3::expr& clause, MTHSolver* solver);
+        MTHSolver* get_clause_solver(const z3::expr& clause) const;
+        MTHSolver* get_predicate_solver(const z3::func_decl& pred) const;
 
         friend std::ostream& operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set);
     };
@@ -289,4 +304,8 @@ namespace multi_theory_horn {
     /// @return The result of the clause analysis in a ClauseAnalysisResult struct.
     ClauseAnalysisResult analyze_clause(z3::context& ctx, z3::expr const& clause);
 
+    /// @brief Get the default parameters for the MTH fixedpoint solvers.
+    /// @param ctx The Z3 context.
+    /// @return The default parameters for the MTH fixedpoint solvers.
+    z3::params get_default_mth_fp_params(z3::context& ctx);
 } // namespace multi_theory_horn
