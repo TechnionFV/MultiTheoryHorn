@@ -264,6 +264,16 @@ namespace multi_theory_horn {
         assert(clause.body().is_implies() && "The clause body must be an implication");
         return clause.body().arg(0);
     }
+
+    z3::params get_default_mth_fp_params(z3::context& ctx) {
+        z3::params params(ctx);
+        params.set("engine", "spacer");
+        params.set("fp.xform.slice", false);
+        params.set("fp.xform.inline_linear", false);
+        params.set("fp.xform.inline_eager", false);
+        return params;
+    }
+
     // ====================================================================
     // MTHSolver methods
     // ====================================================================
@@ -272,6 +282,12 @@ namespace multi_theory_horn {
         if (query)
             clauses.push_back(query);
         return clauses;
+    }
+
+    unsigned MTHSolver::get_bv_size() const {
+        assert(!is_bv && "This method should only be called for IAUF solvers");
+        assert(bv_size != UNDETERMINED_BV_SIZE && "Bit-vector size should be determined");
+        return bv_size;
     }
 
     // ====================================================================
@@ -290,8 +306,11 @@ namespace multi_theory_horn {
     }
 
     MTHSolver& MTHFixedpointSet::getOrInitBVSolver() {
-        if (!bv_solver.has_value())
-            bv_solver.emplace(MTHSolver(ctx));
+        if (!bv_solver.has_value()) {
+            MTHSolver new_solver(ctx, /*is_bv*/ true);
+            new_solver.fp_solver.set(get_default_mth_fp_params(ctx));
+            bv_solver.emplace(std::move(new_solver));
+        }
         return *bv_solver;
     }
 
@@ -310,10 +329,13 @@ namespace multi_theory_horn {
         if (it != iauf_solvers.end())
             return it->second;
 
+        MTHSolver new_solver(ctx, /*is_bv*/ false, bv_size);
+        new_solver.fp_solver.set(get_default_mth_fp_params(ctx));
+
         auto result = iauf_solvers.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(bv_size),
-            std::forward_as_tuple(ctx)
+            std::forward_as_tuple(std::move(new_solver))
         );
 
         return result.first->second;
@@ -331,10 +353,12 @@ namespace multi_theory_horn {
         return ctx.str_symbol(name_str.c_str());
     }
 
-    void MTHFixedpointSet::populate_predicate_maps_for_clause(const z3::expr clause_expr, bool is_query) {
+    void MTHFixedpointSet::populate_predicate_maps_for_clause(const z3::expr clause_expr, MTHSolver* solver, bool is_query) {
         unsigned clause_id = clause_expr.id();
         z3::expr body = get_clause_body(clause_expr, is_query);
         z3::expr head = get_clause_head(clause_expr, is_query);
+        if (bool(head))
+            pred_solver_map.emplace(head.decl(), solver);
         z3::expr_vector conjuncts = utils::get_conjuncts(body);
         z3::expr_vector body_preds(ctx);
         int conjunct_count = conjuncts.size();
@@ -343,25 +367,42 @@ namespace multi_theory_horn {
             // Check if the conjunct is a predicate application
             if (utils::is_uninterpreted_predicate(conjunct))
                 body_preds.push_back(conjunct);
+            pred_solver_map.emplace(conjunct.decl(), solver);
         }
         rule_body_preds_map.emplace(clause_id, body_preds);
         rule_head_pred_map.emplace(clause_id, head);
     }
 
-    std::optional<z3::expr_vector> MTHFixedpointSet::get_rule_body_preds(const unsigned rule_id) const {
-        auto it = rule_body_preds_map.find(rule_id);
+    std::optional<z3::expr_vector> MTHFixedpointSet::get_clause_body_preds(const z3::expr& clause) const {
+        auto it = rule_body_preds_map.find(clause.id());
         if (it != rule_body_preds_map.end()) {
             return it->second;
         }
         return std::nullopt;
     }
 
-    std::optional<z3::expr> MTHFixedpointSet::get_rule_head_pred(const unsigned rule_id) const {
-        auto it = rule_head_pred_map.find(rule_id);
+    std::optional<z3::expr> MTHFixedpointSet::get_clause_head_pred(const z3::expr& clause) const {
+        auto it = rule_head_pred_map.find(clause.id());
         if (it != rule_head_pred_map.end()) {
             return it->second;
         }
         return std::nullopt;
+    }
+
+    void MTHFixedpointSet::map_clause_to_solver(const z3::expr& clause, MTHSolver* solver) {
+        rule_solver_map.emplace(clause.id(), solver);
+    }
+
+    MTHSolver* MTHFixedpointSet::get_clause_solver(const z3::expr& clause) const {
+        auto it = rule_solver_map.find(clause.id());
+        assert(it != rule_solver_map.end() && "Solver not found for the given clause.");
+        return it->second;
+    }
+
+    MTHSolver* MTHFixedpointSet::get_predicate_solver(const z3::func_decl& pred) const {
+        auto it = pred_solver_map.find(pred);
+        assert(it != pred_solver_map.end() && "Solver not found for the given predicate.");
+        return it->second;
     }
 
     std::ostream & operator<<(std::ostream& os, const MTHFixedpointSet& mth_fp_set) {
