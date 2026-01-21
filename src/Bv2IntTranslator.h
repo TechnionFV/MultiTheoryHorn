@@ -16,7 +16,6 @@ namespace multi_theory_horn {
 
     class Bv2IntTranslator {
         z3::context&      ctx;
-        unsigned          m_bv_size; // Size of the bit-vector expressions
         bool              m_is_signed; // Whether to treat bit-vectors as signed or unsigned
         bool              m_simplify; // Whether to simplify the translated expressions
         bool              m_no_overflow; // Whether to consider overflow cases
@@ -24,6 +23,8 @@ namespace multi_theory_horn {
         // Map each original BV expr AST to its translated Int expr
         // This is used to cache results of translations
         std::unordered_map<Z3_ast, z3::expr, AstHash, AstEq> m_translate;
+        // Map each new int variable to its original bit-width
+        std::unordered_map<Z3_ast, unsigned, AstHash, AstEq> m_int_var_bitwidth;
         // collected BV variables (are collected to later be used to create lemmas)
         z3::expr_vector m_vars;
         // A map which tells us where to map each variable we find
@@ -32,6 +33,9 @@ namespace multi_theory_horn {
 
         // A set of lemmas specifying the bounds on variables
         VarLemmaMap m_lemmas;
+
+        const std::string fresh_var_name = "__int_var__";
+        unsigned var_count = 0;
 
         z3::expr bseli(const z3::expr& e, unsigned i);
         z3::expr umod(const z3::expr& e, unsigned k);
@@ -77,8 +81,7 @@ namespace multi_theory_horn {
         z3::expr simplify_equality_mod(const z3::expr& eq);
     public:
         explicit Bv2IntTranslator(z3::context& c, bool is_signed,
-                                  unsigned bv_size, bool simplify = true,
-                                  bool no_overflow = false,
+                                  bool simplify = true, bool no_overflow = false,
                                   const VarMap& bv2int_var_map = VarMap());
         void reset();
 

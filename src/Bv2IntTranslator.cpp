@@ -4,11 +4,10 @@
 
 namespace multi_theory_horn {
 
-    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, unsigned bv_size, 
+    Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, 
                                        bool simplify, bool no_overflow, const VarMap& bv2int_var_map): 
         ctx(c),
         m_is_signed(is_signed),
-        m_bv_size(bv_size),
         m_simplify(simplify),
         m_no_overflow(no_overflow),
         m_bv2int_var_map(bv2int_var_map),
@@ -17,6 +16,7 @@ namespace multi_theory_horn {
 
     void Bv2IntTranslator::reset() {
         m_translate.clear();
+        m_int_var_bitwidth.clear();
         m_lemmas.clear();
     }
 
@@ -66,13 +66,7 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else if (e.is_var()) {
-            // Variables should have a VarMap entry.
-            auto it = m_bv2int_var_map.find(e);
-            assert(it != m_bv2int_var_map.end() && "Variable not found in VarMap");
-            r = it->second;
-            assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
-            unsigned k = e.get_sort().bv_size();
-            create_bound_lemma(r, k);
+            r = translate_const_variable(e);
         }
         else {
             // is_app
@@ -110,9 +104,7 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else if (e.is_var()) {
-            // This should be unreachable as we declare variables
-            // as constants (0-arity apps)
-            UNREACHABLE();
+            r = translate_const_variable(e);
         }
         else { // is_app
             if (is_const_variable(e)) {
@@ -390,19 +382,25 @@ namespace multi_theory_horn {
     z3::expr Bv2IntTranslator::translate_const_variable(const z3::expr& e) {
         // Note: numerals are handled in translate_bv: Z3_OP_BNUM
         // Constants are apps with no arguments
-        std::string name = e.decl().name().str();
         z3::expr r(ctx);
         if (m_bv2int_var_map.find(e) != m_bv2int_var_map.end()) {
             // If we have a mapping for this constant, use it
             r = m_bv2int_var_map.at(e);
         } else {
             // Otherwise, create a new integer constant
+            std::string name;
+            if (e.is_var())
+                name = fresh_var_name + std::to_string(var_count++);
+            else
+                name = e.decl().name().str();
             r = ctx.int_const(name.c_str());
         }
 
         // We only support constants (vars) of Bit-vector sort!
         assert(e.get_sort().is_bv() && "Expected a BV sort for constant");
         unsigned k = e.get_sort().bv_size();
+        Z3_ast key = (Z3_ast)r;
+        m_int_var_bitwidth.emplace(key, k);
         create_bound_lemma(r, k);
         m_vars.push_back(r);
 
@@ -635,7 +633,6 @@ namespace multi_theory_horn {
     }
 
     z3::expr Bv2IntTranslator::simplify_equality_mod(const z3::expr& eq) {
-        uint64_t N = (uint64_t)1 << m_bv_size;
         Z3_decl_kind f = eq.arg(0).decl().decl_kind();
 
         // Early exit if the operator is not MOD
@@ -647,9 +644,21 @@ namespace multi_theory_horn {
         z3::expr lhs = eq.arg(0).arg(0);
         // Right-hand side of mod
         z3::expr rhs = eq.arg(0).arg(1);
+        
+        // Early exit if rhs is not a numeral and lhs is not a constant variable
+        if (!is_const_variable(lhs) || !rhs.is_numeral()) {
+            return eq;
+        }
+
+        assert(lhs.get_sort().is_int() && "Expected lhs to be of Int sort");
+        Z3_ast key = (Z3_ast)lhs;
+        auto it = m_int_var_bitwidth.find(key);
+        assert(it != m_int_var_bitwidth.end() && "Expected to find the bit-width of the variable");
+        unsigned bv_size = it->second;
+        uint64_t N = (uint64_t)1 << bv_size;
 
         // Early exit if rhs is not a numeral or not equal to N, or lhs is not a constant variable
-        if (!rhs.is_numeral() || rhs.get_numeral_uint64() != N  || !is_const_variable(lhs)) {
+        if (rhs.get_numeral_uint64() != N) {
             return eq;
         }
 
@@ -669,7 +678,7 @@ namespace multi_theory_horn {
 
         // Handle signed values
         if (m_is_signed) {
-            uint64_t max_signed_val = ((uint64_t)1 << (m_bv_size - 1)) - 1;
+            uint64_t max_signed_val = ((uint64_t)1 << (bv_size - 1)) - 1;
 
             // If value is outside the signed range, adjust it
             if (value > max_signed_val) {
