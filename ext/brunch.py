@@ -146,7 +146,8 @@ def runTool (tool_args, bench, size, type, base, out, cpu, mem, fmt, prefix='BRU
 
     # Allow placeholders in tool args
     multi_flag = '--multi' if type.lower() == 'multi' else ''
-    fmt_tool_args = [v.format(f=base, bench=bench, size=size, type=multi_flag) for v in tool_args]
+    fmt_tool_args = [v.format(f=base, bench=bench, size=size, multi=multi_flag) for v in tool_args]
+    fmt_tool_args = [a for a in fmt_tool_args if a != '']  # remove Nones
     fmt_tool_args[0] = which (fmt_tool_args[0])  # resolve binary path
     if fmt_tool_args[0] is None:
         raise FileNotFoundError(f"Cannot find executable '{tool_args[0]}' on PATH")
