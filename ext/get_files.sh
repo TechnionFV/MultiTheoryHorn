@@ -158,7 +158,7 @@ else
       --mem "${MEMOUT}" \
       --format "${FORMAT_FIELDS}" \
       "${SPEC}" \
-      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
+      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" "{multi}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
 
     rc=$? # capture return code of the python call
     if [[ $rc -ne 0 ]]; then
