@@ -60,7 +60,8 @@ namespace multi_theory_horn {
         /// @brief A function that return a conjunction of bit-vector bound expressions
         /// of the form `0 <= var < 2^bv_size` for each variable in `vars`.
         /// @param vars The vector of bit-vector variables for which to create the bound expressions.
-        z3::expr get_bv_expr_bounds(z3::expr_vector const& vars) const;
+        /// @param bv_size The size of the bit-vectors.
+        z3::expr get_bv_expr_bounds(z3::expr_vector const& vars, unsigned bv_size) const;
 
         /// @brief Adds behind the scenes a fact corresponding to the predicate given by p_expr
         /// which is the destination of an interface constraint.
@@ -90,10 +91,8 @@ namespace multi_theory_horn {
         /// @param src_expr The key expr of the source predicate.
         /// @param dst_expr The fact's head (the destination predicate of the interface constraint).
         /// @param dst_fp The fixedpoint engine of the destination predicate.
-        /// @param is_dst_int Whether the destination theory is integer theory.
-        /// If yes, then bound constraints are added to the generated fact.
         void add_predicate_fact(z3::expr const& src_expr, z3::expr const& dst_expr,
-                                z3::fixedpoint& dst_fp, bool is_dst_int);
+                                MTHSolver* dst_fp);
         
         /// @brief Adds an interface constraint (mapping) between two predicates
         /// in different theories.
@@ -102,7 +101,7 @@ namespace multi_theory_horn {
         /// @param fp2 The solver of the target to which we add a fact.
         /// @param is_dst_int Whether the destination theory is integer theory.
         /// If yes, then bound constraints are added to the generated fact.
-        void add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, z3::fixedpoint& fp2, bool is_dst_int);
+        void add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, MTHSolver* fp2);
 
         /// @brief Generates all needed interface constraints between all
         /// populated fixedpoint engines.
