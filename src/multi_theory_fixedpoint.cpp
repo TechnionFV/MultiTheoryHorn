@@ -168,8 +168,7 @@ namespace multi_theory_horn {
         return new_rule;
     }
 
-    z3::expr MT_fixedpoint::get_bv_expr_bounds(z3::expr_vector const& vars) const {
-        unsigned bv_size = m_bv_size;
+    z3::expr MT_fixedpoint::get_bv_expr_bounds(z3::expr_vector const& vars, unsigned bv_size) const {
         bool is_signed = m_is_signed.value();
 
         int64_t N = (int64_t)1 << bv_size;
@@ -228,7 +227,7 @@ namespace multi_theory_horn {
         z3::symbol fact_name = m_ctx.str_symbol(fact_name_str.c_str());
         z3::expr added_fact(m_ctx);
         if (theory == Theory::IAUF) {
-            CHC fact(vars, m_ctx.bool_val(true), get_bv_expr_bounds(vars), head);
+            CHC fact(vars, m_ctx.bool_val(true), get_bv_expr_bounds(vars, m_bv_size), head);
             added_fact = fact.get_rule_expr();
             m_fp_int.add_rule(added_fact, fact_name);
             // Store the fact in the fact map with the head predicate decl AST as the key
@@ -325,7 +324,7 @@ namespace multi_theory_horn {
     }
 
     void MT_fixedpoint::add_predicate_fact(z3::expr const& src_expr, z3::expr const& dst_expr,
-                                           z3::fixedpoint& dst_fp, bool is_dst_int) {
+                                           MTHSolver* dst_fp) {
         // Create fresh variables according to dst_expr's sort
         assert(src_expr.num_args() == dst_expr.num_args() &&
                "Source and destination predicates must have the same arity");
@@ -345,26 +344,26 @@ namespace multi_theory_horn {
         std::string fact_name_str = get_fresh_added_fact_name();
         z3::symbol fact_name = m_ctx.str_symbol(fact_name_str.c_str());
         z3::expr bound_expr = m_ctx.bool_val(true);
-        if (is_dst_int)
-            bound_expr = get_bv_expr_bounds(vars);
+        if (!dst_fp->is_bv_solver())
+            bound_expr = get_bv_expr_bounds(vars, dst_fp->get_bv_size());
         CHC fact(vars, m_ctx.bool_val(true), bound_expr, dst_new);
         z3::expr added_fact(m_ctx);
         added_fact = fact.get_rule_expr();
         z3::func_decl dst_decl = dst_expr.decl();
-        dst_fp.register_relation(dst_decl);
-        dst_fp.add_rule(added_fact, fact_name);
+        dst_fp->fp_solver.register_relation(dst_decl);
+        dst_fp->fp_solver.add_rule(added_fact, fact_name);
 
         // Store the fact in the fact map with the head predicate decl AST as the key
         m_interface_dst_fact_map.emplace(src_expr.decl(), std::make_pair(fact, fact_name));
     }
 
-    void MT_fixedpoint::add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, z3::fixedpoint& fp2, bool is_dst_int) {
+    void MT_fixedpoint::add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, MTHSolver* fp2) {
         if (!m_interface_constraint_map.insert(p1_expr, p2_expr))
             return;
         DEBUG_MSG(OUT() << "Adding interface constraint: " 
             << p1_expr << " ------> " << p2_expr << std::endl);
         m_interface_src_strengthening_map.emplace(p1_expr.decl(), m_ctx.bool_val(true));
-        add_predicate_fact(p1_expr, p2_expr, fp2, is_dst_int);
+        add_predicate_fact(p1_expr, p2_expr, fp2);
     }
 
     void MT_fixedpoint::generate_interface_constraints() {
@@ -405,7 +404,7 @@ namespace multi_theory_horn {
                             if (bv_pred_head_name == body_pred_name) {
                                 // Found a BV -> INT interface constraint
                                 add_interface_constraint(bv_clause_head_pred, body_pred,
-                                                         iauf_solver.fp_solver, /*is_dst_int=*/ true);
+                                                         &iauf_solver);
                             }
                         }
                     }
@@ -418,7 +417,7 @@ namespace multi_theory_horn {
                             if (int_pred_head_name == bv_body_pred_name) {
                                 // Found an INT -> BV interface constraint
                                 add_interface_constraint(clause_head_pred, bv_body_pred,
-                                                         m_mth_fp_set.getBVSolver().fp_solver, /*is_dst_int=*/ false);
+                                                         &m_mth_fp_set.getBVSolver());
                             }
                         }
                     }
@@ -557,7 +556,9 @@ namespace multi_theory_horn {
 
             // Get the appropriate solver for the current query
             bool is_bv_solver = current_solver->is_bv_solver();
-            DEBUG_MSG(OUT() << "Querying engine:\n" << current_solver->fp_solver << std::endl << "With:\n" << current_query << std::endl);
+            DEBUG_MSG(OUT() << "Querying " << (is_bv_solver ? "BV" : "Int") 
+                            << " engine:\n" << current_solver->fp_solver 
+                            << std::endl << "With:\n" << current_query << std::endl);
 
             // Query the solver
             z3::check_result res = current_solver->fp_solver.query(current_query);
