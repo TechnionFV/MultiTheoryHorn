@@ -308,4 +308,12 @@ namespace multi_theory_horn {
     /// @param ctx The Z3 context.
     /// @return The default parameters for the MTH fixedpoint solvers.
     z3::params get_default_mth_fp_params(z3::context& ctx);
+
+    /// @brief Evaluate the given clause with the provided variable substitutions.
+    /// If no substitutions are provided, the variable is replaced with a new constant.
+    /// @param clause The clause to evaluate.
+    /// @param unknown_vars_subs The substitutions for unknown variables.
+    /// @return The evaluated clause.
+    z3::expr evaluate_clause_vars(const z3::expr& clause,
+                                  VarMap& unknown_vars_subs);
 } // namespace multi_theory_horn

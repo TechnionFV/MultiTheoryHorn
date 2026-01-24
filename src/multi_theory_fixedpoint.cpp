@@ -168,6 +168,66 @@ namespace multi_theory_horn {
         return new_rule;
     }
 
+    /// This function tries to find the correct refutation leaf predicate.
+    /// Example:
+    ///     true -> q(x)
+    ///     q(x) && phi -> r(x)
+    /// When analyzing the refutation leaf, spacer might inline the first clause
+    /// and our analysis would see the refutation leaf as r(x) instead of q(x).
+    /// To fix this, we solve backwards from r(x) through the clause, to get the
+    /// values of the variables in q(x).
+    static z3::expr evaluate_backwards(z3::expr const& q, z3::expr const& clause) {
+        DEBUG_MSG(OUT() << "Evaluating backwards query: " << q << "\nthrough clause:\n" << clause << std::endl);
+        z3::expr clause_body = get_clause_body(clause, /*is_query*/ false);
+        z3::expr clause_head = get_clause_head(clause, /*is_query*/ false);
+        z3::expr_vector body_conjuncts = utils::get_conjuncts(clause_body);
+
+        z3::context& ctx = clause.ctx();
+        z3::expr body_pred(ctx);
+        z3::expr_vector non_pred_conjuncts(ctx);
+        for (const z3::expr& body_conjunct : body_conjuncts) {
+            if (utils::is_uninterpreted_predicate(body_conjunct)) {
+                assert(!bool(body_pred) && "We don't currently support non linear CHCs");
+                body_pred = body_conjunct;
+            }
+            else {
+                non_pred_conjuncts.push_back(body_conjunct);
+            }
+        }
+        z3::expr body_no_pred = z3::mk_and(non_pred_conjuncts);
+        assert(z3::eq(clause_head.decl(), q.decl()) && "Clause head predicate does not match query predicate");
+
+        z3::expr_vector head_arg_expr_assignment(ctx);
+        for (unsigned i = 0; i < clause_head.num_args(); ++i) {
+            head_arg_expr_assignment.push_back(q.arg(i) == clause_head.arg(i));
+        }
+        // Add the head argument assignments to the body without predicate
+        body_no_pred = body_no_pred && z3::mk_and(head_arg_expr_assignment);
+
+        VarMap unknown_var_subs;
+        z3::expr eval_body_no_pred = evaluate_clause_vars(body_no_pred, unknown_var_subs);
+
+        z3::solver solver(ctx);
+        solver.add(eval_body_no_pred);
+        z3::check_result res = solver.check();
+        assert(res == z3::sat && "Could not evaluate body without predicate");
+        z3::model m = solver.get_model();
+
+        z3::expr new_q(ctx);
+        z3::expr_vector new_q_args(ctx);
+        for (unsigned i = 0; i < body_pred.args().size(); ++i) {
+            z3::expr arg = body_pred.arg(i);
+            assert(unknown_var_subs.find(arg) != unknown_var_subs.end() &&
+                   "Argument not found in unknown var substitutions");
+            z3::expr unknown_var = unknown_var_subs.at(arg);
+            z3::expr val = m.eval(unknown_var, /*model_completion*/ true);
+            new_q_args.push_back(val);
+        }
+
+        new_q = body_pred.decl()(new_q_args);
+        return new_q;
+    }
+
     z3::expr MT_fixedpoint::get_bv_expr_bounds(z3::expr_vector const& vars, unsigned bv_size) const {
         bool is_signed = m_is_signed.value();
 
@@ -405,6 +465,8 @@ namespace multi_theory_horn {
                                 // Found a BV -> INT interface constraint
                                 add_interface_constraint(bv_clause_head_pred, body_pred,
                                                          &iauf_solver);
+                                if (bool(clause_head_pred))
+                                    m_interface_dst_orig_head_to_clause_map.emplace(clause_head_pred.decl(), clause);
                             }
                         }
                     }
@@ -418,6 +480,8 @@ namespace multi_theory_horn {
                                 // Found an INT -> BV interface constraint
                                 add_interface_constraint(clause_head_pred, bv_body_pred,
                                                          &m_mth_fp_set.getBVSolver());
+                                if (bool(bv_clause_head_pred))
+                                    m_interface_dst_orig_head_to_clause_map.emplace(bv_clause_head_pred.decl(), bv_clause);
                             }
                         }
                     }
@@ -634,9 +698,21 @@ namespace multi_theory_horn {
                 DEBUG_MSG(OUT() << "Refutation leaf predicate: " << q << std::endl);
                 // If we're dealing with a non user-visible predicate, use the query
                 // predicate from the config, otherwise use the query predicate from the refutation
-                z3::func_decl search_decl = (is_user_visible_predicate(q.decl())) ? q.decl() : p_decl;
+                bool is_user_visible = is_user_visible_predicate(q.decl());
+                z3::func_decl search_decl = (is_user_visible) ? q.decl() : p_decl;
+                auto q_tag = m_interface_constraint_map.find_pred(search_decl);
 
-                if (auto q_tag = m_interface_constraint_map.find_pred(search_decl)) {
+                // We only do one backwards evaluation step
+                if (!q_tag && is_user_visible && m_interface_dst_orig_head_to_clause_map.find(search_decl) !=
+                    m_interface_dst_orig_head_to_clause_map.end()) {
+                    z3::expr dst_orig_clause = m_interface_dst_orig_head_to_clause_map.at(search_decl);
+                    q = evaluate_backwards(q, dst_orig_clause);
+                    DEBUG_MSG(OUT() << "After evaluating backwards, new refutation leaf predicate: " << q << std::endl);
+                    search_decl = q.decl();
+                }
+
+                q_tag = m_interface_constraint_map.find_pred(search_decl);
+                if (q_tag) {
                     z3::expr_vector dst_vars = m_interface_dst_vars.at(q_tag.value().decl());
                     z3::expr phi = get_refutation_leaf_phi(q, dst_vars);
                     DEBUG_MSG(OUT() << "phi: " << phi << std::endl);

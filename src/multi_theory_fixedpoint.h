@@ -27,6 +27,7 @@ namespace multi_theory_horn {
         PredicateToExprMap m_interface_src_strengthening_map;
         PredicateToCHCConfigMap m_interface_dst_fact_map;
         std::map<z3::func_decl, z3::expr_vector, compare_func_decl> m_interface_dst_vars;
+        PredicateToExprMap m_interface_dst_orig_head_to_clause_map;
 
         z3::fixedpoint m_fp_int;
         z3::fixedpoint m_fp_bv;
@@ -99,8 +100,6 @@ namespace multi_theory_horn {
         /// @param p1_expr The source predicate.
         /// @param p2_expr The target predicate.
         /// @param fp2 The solver of the target to which we add a fact.
-        /// @param is_dst_int Whether the destination theory is integer theory.
-        /// If yes, then bound constraints are added to the generated fact.
         void add_interface_constraint(z3::expr p1_expr, z3::expr p2_expr, MTHSolver* fp2);
 
         /// @brief Generates all needed interface constraints between all
