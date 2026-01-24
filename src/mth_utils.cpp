@@ -274,6 +274,36 @@ namespace multi_theory_horn {
         return params;
     }
 
+    static z3::expr evaluate_clause_vars_internal(z3::expr const& expr,
+                                                  VarMap &unknown_vars_subs, unsigned &unknown_vars) {
+        if (expr.is_var()) {
+            if (unknown_vars_subs.find(expr) != unknown_vars_subs.end())
+                return unknown_vars_subs.at(expr);
+            z3::sort sort = expr.get_sort();
+            std::string var_name = "tmp_var_" + std::to_string(unknown_vars++);
+            z3::expr new_var = expr.ctx().constant(var_name.c_str(), sort);
+            unknown_vars_subs.emplace(expr, new_var);
+            return new_var;
+        }
+
+        if (expr.num_args() == 0)
+            return expr;
+
+        z3::expr_vector args = expr.args();
+        z3::expr_vector new_args(expr.ctx());
+        for (unsigned i = 0; i < args.size(); ++i) {
+            z3::expr evaluated_arg = evaluate_clause_vars_internal(args[i], unknown_vars_subs, unknown_vars);
+            new_args.push_back(evaluated_arg);
+        }
+
+        return expr.decl()(new_args);
+    }
+
+    z3::expr evaluate_clause_vars(z3::expr const& expr, VarMap &unknown_vars_subs) {
+        unsigned unknown_vars = 0;
+        return evaluate_clause_vars_internal(expr, unknown_vars_subs, unknown_vars);
+    }
+
     // ====================================================================
     // MTHSolver methods
     // ====================================================================
