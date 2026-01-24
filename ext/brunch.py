@@ -31,7 +31,7 @@ def parseArgs (argv):
                     type=int, help='Memory limit (MB)', default=512)
     # In our usage this is NOT a file path; it is either "bench:size", "bench,size" or "bench size".
     p.add_argument ('file', nargs='+',
-                    help='Benchmark spec(s): bench:size or bench,size or "bench size", or a .list with one spec per line')
+                    help='Benchmark spec(s): bench:size:type or bench,size,type or "bench size type", or a .list with one spec per line')
     p.add_argument ('--prefix', default='BRUNCH_STAT',
                     help='Prefix for stats')
     p.add_argument ('--format', required=True, help='Fields')
@@ -81,7 +81,7 @@ def statsLine (stats_file, fmt, stats):
 cpuTotal = 0.0
 
 
-### parse a spec token into (bench, size). Accept "bench:size", "bench,size", or "bench size".
+### parse a spec token into (bench, size, type). Accept "bench:size:type", "bench,size,type", or "bench size type".
 def parse_spec(spec):
     # Normalize separators: space(s), comma, or colon
     s = spec.strip()
@@ -89,24 +89,25 @@ def parse_spec(spec):
         raise ValueError("empty benchmark spec")
     # try colon
     if ':' in s:
-        name, sz = s.split(':', 1)
+        name, sz, type = s.split(':', 2)
     elif ',' in s:
-        name, sz = s.split(',', 1)
+        name, sz, type = s.split(',', 2)
     else:
         parts = s.split()
-        if len(parts) == 2:
-            name, sz = parts[0], parts[1]
-        elif len(parts) == 1:
-            raise ValueError(f"size missing in spec '{spec}' (use 'bench:size')")
+        if len(parts) == 3:
+            name, sz, type = parts[0], parts[1], parts[2]
+        elif len(parts) == 2 or len(parts) == 1:
+            raise ValueError(f"spec '{spec}' missing a field, should be 'bench size type'")
         else:
             raise ValueError(f"cannot parse spec '{spec}'")
     name = name.strip()
     sz = sz.strip()
-    if not name or not sz:
+    type = type.strip()
+    if not name or not sz or not type:
         raise ValueError(f"bad spec '{spec}'")
     size_int = int(sz)  # may raise ValueError → caller handles
-    base = f"{name}-{size_int}"
-    return name, size_int, base
+    base = f"{name}-{size_int}-{type}"
+    return name, size_int, type, base
 
 ### ensure directories exist: <out>/tool and <out>/stats
 def ensure_dirs(out_dir):
@@ -120,7 +121,7 @@ def ensure_dirs(out_dir):
         os.mkdir(stats_dir)
     return tool_dir, stats_dir
 
-def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_STAT', results_csv=None):
+def runTool (tool_args, bench, size, type, base, out, cpu, mem, fmt, prefix='BRUNCH_STAT', results_csv=None):
     global cpuTotal
     import resource as r
 
@@ -144,7 +145,8 @@ def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_ST
                 pass
 
     # Allow placeholders in tool args
-    fmt_tool_args = [v.format(f=base, bench=bench, size=size) for v in tool_args]
+    multi_flag = '--multi' if type.lower() == 'multi' else ''
+    fmt_tool_args = [v.format(f=base, bench=bench, size=size, type=multi_flag) for v in tool_args]
     fmt_tool_args[0] = which (fmt_tool_args[0])  # resolve binary path
     if fmt_tool_args[0] is None:
         raise FileNotFoundError(f"Cannot find executable '{tool_args[0]}' on PATH")
@@ -170,7 +172,7 @@ def runTool (tool_args, bench, size, base, out, cpu, mem, fmt, prefix='BRUNCH_ST
     # Some common fields users often include in --format
     stats['base']   = base
     stats['bench']  = bench
-    stats['type']   = 'MULTI' if 'multi' in bench.lower() else 'BV'
+    stats['type']   = 'MULTI' if type.lower() == 'multi' else 'BV'
     stats['size']   = size
     stats['result'] = result
     stats['Status'] = p.returncode
@@ -219,7 +221,7 @@ def main (argv):
     # Run all specs
     for spec in specs:
         try:
-            bench, size, base = parse_spec(spec)
+            bench, size, type, base = parse_spec(spec)
         except Exception as e:
             # Record an error row for this spec (per-run and unified)
             base = spec.replace('/', '_').replace(' ', '_')
@@ -236,7 +238,7 @@ def main (argv):
             statsLine (header_csv, fmt, stats)
             continue
 
-        runTool (args.tool_args, bench, size, base, args.out,
+        runTool (args.tool_args, bench, size, type, base, args.out,
                  cpu=args.cpu,
                  mem=args.mem,
                  fmt=fmt,
