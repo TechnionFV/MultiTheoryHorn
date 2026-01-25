@@ -648,12 +648,7 @@ namespace multi_theory_horn {
                     if (is_bv_solver) {
                         Bv2IntTranslator bv2int_t(m_ctx, is_signed, m_simplify, /* no_overflow */ false, var_map);
                         p_interp_trans = bv2int_t.translate(p_interp);
-                        // Go over all the lemmas and conjoin them with the translated predicate
-                        z3::expr_vector lemmas(m_ctx);
-                        for (const auto& kv : bv2int_t.lemmas()) {
-                            lemmas.push_back(kv.second);
-                        }
-                        p_interp_trans = p_interp_trans && z3::mk_and(lemmas);
+                        p_interp_trans = p_interp_trans;
                     }
                     else {
                         unsigned bv_size = current_solver->get_bv_size();
