@@ -168,6 +168,36 @@ namespace multi_theory_horn {
         return new_rule;
     }
 
+    static z3::expr get_phi_from_clause_body(z3::expr const& body, z3::expr &pred) {
+        z3::expr_vector body_conjuncts = utils::get_conjuncts(body);
+        z3::expr phi(body.ctx());
+        for (const z3::expr& body_conjunct : body_conjuncts) {
+            if (utils::is_uninterpreted_predicate(body_conjunct)) {
+                assert(!bool(pred) && "We don't currently support non linear CHCs");
+                pred = body_conjunct;
+            }
+            else {
+                if (!bool(phi)) {
+                    phi = body_conjunct;
+                }
+                else {
+                    phi = phi && body_conjunct;
+                }
+            }
+        }
+        return phi;
+    }
+
+    // Converts the given VarMap to a z3::expr_vector containing only the
+    // destination variables.
+    static z3::expr_vector get_mapped_vars_as_vec(z3::context& ctx, VarMap const& var_map) {
+        z3::expr_vector result(ctx);
+        for (const auto& [key, value] : var_map) {
+            result.push_back(value);
+        }
+        return result;
+    }
+
     /// This function tries to find the correct refutation leaf predicate.
     /// Example:
     ///     true -> q(x)
@@ -184,17 +214,7 @@ namespace multi_theory_horn {
 
         z3::context& ctx = clause.ctx();
         z3::expr body_pred(ctx);
-        z3::expr_vector non_pred_conjuncts(ctx);
-        for (const z3::expr& body_conjunct : body_conjuncts) {
-            if (utils::is_uninterpreted_predicate(body_conjunct)) {
-                assert(!bool(body_pred) && "We don't currently support non linear CHCs");
-                body_pred = body_conjunct;
-            }
-            else {
-                non_pred_conjuncts.push_back(body_conjunct);
-            }
-        }
-        z3::expr body_no_pred = z3::mk_and(non_pred_conjuncts);
+        z3::expr body_no_pred = get_phi_from_clause_body(clause_body, body_pred);
         assert(z3::eq(clause_head.decl(), q.decl()) && "Clause head predicate does not match query predicate");
 
         z3::expr_vector head_arg_expr_assignment(ctx);
@@ -694,26 +714,46 @@ namespace multi_theory_horn {
                 // If we're dealing with a non user-visible predicate, use the query
                 // predicate from the config, otherwise use the query predicate from the refutation
                 bool is_user_visible = is_user_visible_predicate(q.decl());
-                z3::func_decl search_decl = (is_user_visible) ? q.decl() : p_decl;
-                auto q_tag = m_interface_constraint_map.find_pred(search_decl);
+                z3::func_decl leaf = (is_user_visible) ? q.decl() : p_decl;
+                auto q_tag = m_interface_constraint_map.find_pred(leaf);
 
-                // We only do one backwards evaluation step
-                if (!q_tag && is_user_visible && m_interface_dst_orig_head_to_clause_map.find(search_decl) !=
-                    m_interface_dst_orig_head_to_clause_map.end()) {
-                    z3::expr dst_orig_clause = m_interface_dst_orig_head_to_clause_map.at(search_decl);
+                // If the leaf is the original first head of the set of
+                // CHCs before adding the fact of the interface constraint, we try to
+                // evaluate backwards to get the correct refutation leaf predicate,
+                // which should be the head of the added fact clause.
+                bool is_leaf_orig_head = m_interface_dst_orig_head_to_clause_map.find(leaf) !=
+                                         m_interface_dst_orig_head_to_clause_map.end();
+                if (!q_tag && is_user_visible && is_leaf_orig_head) {
+                    z3::expr dst_orig_clause = m_interface_dst_orig_head_to_clause_map.at(leaf);
                     q = evaluate_backwards(q, dst_orig_clause);
                     DEBUG_MSG(OUT() << "After evaluating backwards, new refutation leaf predicate: " << q << std::endl);
-                    search_decl = q.decl();
+                    leaf = q.decl();
                 }
 
-                q_tag = m_interface_constraint_map.find_pred(search_decl);
+                q_tag = m_interface_constraint_map.find_pred(leaf);
                 if (q_tag) {
                     z3::expr_vector dst_vars = m_interface_dst_vars.at(q_tag.value().decl());
-                    z3::expr phi = get_refutation_leaf_phi(q, dst_vars);
+                    bool should_propagate_wpc = !is_bv_solver && z3::eq(leaf, p_decl);
+                    DEBUG_MSG(OUT() << "Should propagate weakest precondition: " 
+                                     << (should_propagate_wpc ? "Yes" : "No") << std::endl);
+                    z3::expr phi(m_ctx);
+                    z3::expr extract_query_pred(m_ctx);
+                    z3::expr query_body = get_clause_body(current_query, /*is_query*/ true);
+                    if (should_propagate_wpc) {
+                        assert(!is_leaf_orig_head);
+                        phi = get_phi_from_clause_body(query_body, extract_query_pred);
+                        assert(z3::eq(extract_query_pred.decl(), p_decl) && 
+                               "Extracted query predicate does not p");
+                        std::ignore = extract_query_pred;
+                    }
+                    else
+                        phi = get_refutation_leaf_phi(q, dst_vars);
                     DEBUG_MSG(OUT() << "phi: " << phi << std::endl);
 
                     z3::expr phi_trans(m_ctx);
-                    z3::expr_vector translated_vars(m_ctx);
+                    z3::expr_vector q_tag_new_vars(m_ctx);
+                    z3::expr_vector new_query_vars(m_ctx);
+                    VarMap fresh_var_map;
                     if (is_bv_solver) {
                         Bv2IntTranslator bv2int_t(m_ctx, is_signed, m_simplify);
                         phi_trans = bv2int_t.translate(phi);
@@ -723,23 +763,35 @@ namespace multi_theory_horn {
                             lemmas.push_back(kv.second);
                         }
                         phi_trans = (phi_trans) && z3::mk_and(lemmas);
-                        translated_vars = bv2int_t.vars();
+                        q_tag_new_vars = bv2int_t.vars();
+                        new_query_vars = q_tag_new_vars;
                     } else {
                         unsigned bv_size = current_solver->get_bv_size();
                         Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify);
                         phi_trans = int2bv_t.translate(phi, /*preprocess*/ m_int2bv_preprocess);
-                        translated_vars = int2bv_t.vars();
+                        fresh_var_map = int2bv_t.get_fresh_var_map();
+                        if (should_propagate_wpc) {
+                            // In this case the leaf predicate is the same as p_expr
+                            // true -> p(X)
+                            // exists X. p(X) && phi
+                            q_tag_new_vars = get_new_predicate_bv_vars(p_expr, fresh_var_map, bv_size);
+                            new_query_vars = get_mapped_vars_as_vec(m_ctx, fresh_var_map);
+                        } else {
+                            // TODO: Improve upon using .vars()
+                            q_tag_new_vars = int2bv_t.vars();
+                            new_query_vars = q_tag_new_vars;
+                        }
                     }
 
                     DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);
-                    z3::expr q_tag_new = q_tag.value().decl()(translated_vars);
+                    z3::expr q_tag_new = q_tag.value().decl()(q_tag_new_vars);
                     DEBUG_MSG(OUT() << "q' (with translated vars) = " << q_tag_new << std::endl);
 
                     auto st_it = m_interface_src_strengthening_map.find(q_tag.value().decl());
                     assert(st_it != m_interface_src_strengthening_map.end() && "Strengthening expression not found");
                     z3::expr query_phi = phi_trans || !(st_it->second);
 
-                    z3::expr next_query = z3::exists(translated_vars, q_tag_new && query_phi);
+                    z3::expr next_query = z3::exists(new_query_vars, q_tag_new && query_phi);
                     MTHSolver* next_solver = m_mth_fp_set.get_predicate_solver(q_tag.value().decl());
                     S.push(QueryConfig(next_query, q_tag_new, next_solver));
                 }

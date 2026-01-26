@@ -304,6 +304,45 @@ namespace multi_theory_horn {
         return evaluate_clause_vars_internal(expr, unknown_vars_subs, unknown_vars);
     }
 
+    z3::expr_vector get_new_predicate_bv_vars(const z3::expr& predicate,
+                                              VarMap& known_vars_subs,
+                                              unsigned bv_size) {
+        z3::context& ctx = predicate.ctx();
+        z3::expr_vector vars(ctx);
+        unsigned counter = 0;
+        for (unsigned i = 0; i < predicate.num_args(); ++i) {
+            z3::expr arg = predicate.arg(i);
+            if (known_vars_subs.find(arg) != known_vars_subs.end()) {
+                vars.push_back(known_vars_subs.at(arg));
+            } else {
+                std::string var_name = "tmp_" + std::to_string(counter++);
+                z3::expr new_var = ctx.bv_const(var_name.c_str(), bv_size);
+                known_vars_subs.emplace(arg, new_var);
+                vars.push_back(new_var);
+            }
+        }
+        return vars;
+    }
+
+    z3::expr_vector get_new_predicate_int_vars(const z3::expr& predicate,
+                                               VarMap& known_vars_subs) {
+        z3::context& ctx = predicate.ctx();
+        z3::expr_vector vars(ctx);
+        unsigned counter = 0;
+        for (unsigned i = 0; i < predicate.num_args(); ++i) {
+            z3::expr arg = predicate.arg(i);
+            if (known_vars_subs.find(arg) != known_vars_subs.end()) {
+                vars.push_back(known_vars_subs.at(arg));
+            } else {
+                std::string var_name = "tmp_" + std::to_string(counter++);
+                z3::expr new_var = ctx.int_const(var_name.c_str());
+                known_vars_subs.emplace(arg, new_var);
+                vars.push_back(new_var);
+            }
+        }
+        return vars;
+    }
+
     // ====================================================================
     // MTHSolver methods
     // ====================================================================

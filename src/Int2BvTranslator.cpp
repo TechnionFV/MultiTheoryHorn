@@ -174,13 +174,19 @@ namespace multi_theory_horn {
             // If we have a mapping for this constant use it
             r = m_int2bv_var_map.at(e);
         } else {
-            // Otherwise, create a new BV constant
-            std::string name;
-            if (e.is_var())
-                name = fresh_var_name + std::to_string(var_count++);
-            else
-                name = e.decl().name().str();
-            r = ctx.bv_const(name.c_str(), m_bv_size);
+            // If we have already created a fresh var for this constant, use it
+            if (m_fresh_var_map.find(e) != m_fresh_var_map.end()) {
+                r = m_fresh_var_map.at(e);
+            } else {
+                // Otherwise, create a new BV constant
+                std::string name;
+                if (e.is_var())
+                    name = fresh_var_name + std::to_string(var_count++);
+                else
+                    name = e.decl().name().str();
+                r = ctx.bv_const(name.c_str(), m_bv_size);
+                m_fresh_var_map.emplace(e, r);
+            }
         }
         
         m_vars.push_back(r);
