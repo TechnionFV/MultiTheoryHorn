@@ -35,7 +35,8 @@ namespace utils {
     }
 
     bool is_uninterpreted_predicate(const z3::expr& e) {
-        return e.decl().decl_kind() == Z3_OP_UNINTERPRETED;
+        Z3_decl_kind kind = e.decl().decl_kind();
+        return kind == Z3_OP_UNINTERPRETED || kind == Z3_OP_RECURSIVE;
     }
 
     int64_t get_signed_bv_lower_bound(unsigned bv_size) {
