@@ -68,4 +68,13 @@ namespace utils {
     /// @param bv_size The size of the bit-vector.
     /// @return The lower bound.
     uint64_t get_unsigned_bv_lower_bound(unsigned bv_size);
+
+    /// @brief Constructs a Z3 BV application based on the given declaration kind and arguments.
+    /// @param ctx The Z3 context.
+    /// @param decl_kind The declaration kind.
+    /// @param args The arguments for the expression.
+    /// @return The constructed Z3 expression.
+    z3::expr get_bv_app_based_on_decl(z3::context& ctx,
+                                      const Z3_decl_kind& decl_kind,
+                                      const z3::expr_vector& args);
 } // namespace utils
