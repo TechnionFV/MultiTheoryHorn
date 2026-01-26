@@ -316,4 +316,14 @@ namespace multi_theory_horn {
     /// @return The evaluated clause.
     z3::expr evaluate_clause_vars(const z3::expr& clause,
                                   VarMap& unknown_vars_subs);
+    
+    // TODO: Consider making this an internal translator funciton.
+    z3::expr_vector get_new_predicate_bv_vars(const z3::expr& predicate,
+                                              VarMap& known_vars_subs,
+                                              unsigned bv_size);
+    
+    // TODO: Consider making this an internal translator funciton.
+    z3::expr_vector get_new_predicate_int_vars(const z3::expr& predicate,
+                                               VarMap& known_vars_subs);
+ 
 } // namespace multi_theory_horn

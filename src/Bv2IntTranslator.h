@@ -35,6 +35,7 @@ namespace multi_theory_horn {
         VarLemmaMap m_lemmas;
 
         const std::string fresh_var_name = "__int_var__";
+        VarMap m_fresh_var_map;
         unsigned var_count = 0;
 
         z3::expr bseli(const z3::expr& e, unsigned i);
@@ -92,5 +93,6 @@ namespace multi_theory_horn {
         z3::expr_vector vars() const   { return m_vars; }
         const VarLemmaMap& lemmas() const { return m_lemmas; }
         const VarMap& bv2int_var_map() const { return m_bv2int_var_map; }
+        const VarMap& get_fresh_var_map() const { return m_fresh_var_map; }
     };
 } // namespace multi_theory_horn

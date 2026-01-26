@@ -25,7 +25,8 @@ namespace multi_theory_horn {
         // A map which tells us where to map each variable we find
         // in the expressions given through the translate method
         VarMap m_int2bv_var_map;
-
+        
+        VarMap m_fresh_var_map;
         const std::string fresh_var_name = "__bv_var__";
         unsigned var_count = 0;
 
@@ -58,5 +59,6 @@ namespace multi_theory_horn {
         
         // Accessors for the collected vars
         const z3::expr_vector& vars() const { return m_vars; }
+        const VarMap& get_fresh_var_map() const { return m_fresh_var_map; }
     };
 } // namespace multi_theory_horn
