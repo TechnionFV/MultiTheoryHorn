@@ -15,6 +15,7 @@ namespace multi_theory_horn {
     private:
         z3::context& m_ctx;
         unsigned m_bv_size;
+        unsigned m_bounds_bv_size;
         bool m_is_signed;
 
         using ExprVectorMatrix = std::vector<std::vector<z3::expr_vector>>;
@@ -41,7 +42,8 @@ namespace multi_theory_horn {
 
         bool is_const_variable(const z3::expr& e) const;
 
-        z3::expr create_bounds_expr(const z3::expr& term) const;
+        z3::expr create_arith_bounds_expr(const z3::expr& term) const;
+        z3::expr create_var_bounds_expr(const z3::expr& var) const;
         bool is_const_in_bounds(const z3::expr& const_e) const;
         z3::expr create_term_out_of_bounds_expr(const z3::expr& e) const;
 
@@ -75,6 +77,9 @@ namespace multi_theory_horn {
         // Intended use is only for testing.
         z3::expr create_SAT_out_of_bounds(const z3::expr& e);
         z3::expr create_UNSAT_out_of_bounds(const z3::expr& e);
+
+        void set_bounds_bv_size(unsigned bv_size) { m_bounds_bv_size = bv_size; }
+        bool requires_preprocessing(const z3::expr& e);
 
         z3::expr preprocess(const z3::expr& e);
     };

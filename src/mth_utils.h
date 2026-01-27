@@ -7,6 +7,8 @@
 #include "utils.h"
 
 namespace multi_theory_horn {
+    static constexpr unsigned MAX_MTH_BV_SIZE = 63;
+
     // Centralized output sinks (default to std::cout/std::cerr)
     inline std::ostream* g_out = &std::cout;
     inline std::ostream* g_err = &std::cerr;
@@ -316,4 +318,21 @@ namespace multi_theory_horn {
     /// @return The evaluated clause.
     z3::expr evaluate_clause_vars(const z3::expr& clause,
                                   VarMap& unknown_vars_subs);
+    
+    /// @brief The function goes over constants and variables in the translated_expr
+    /// and extends them to the desired extension_bv_size using either sign-extension
+    /// or zero-extension based on the is_signed flag.
+    /// @note The constants are extended by creating new constants of the desired size.
+    ///       Variables are extended using Z3's sign-extend or zero-extend operations.
+    /// @note We assume in this function that variables are constants.
+    /// @note We assume that all constants and variables have the same base bit-vector size.
+    /// @param expr The expression to extend.
+    /// @param is_signed Whether the extension is signed or not.
+    /// @param base_bv The base bit-vector size of the expression.
+    /// @param extension_bv_size The size of the extended bit-vector.
+    /// @return The extended expression.
+    z3::expr extend_bv_expr(const z3::expr& expr,
+                            bool is_signed,
+                            unsigned base_bv,
+                            unsigned extension_bv_size);
 } // namespace multi_theory_horn

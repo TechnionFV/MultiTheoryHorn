@@ -652,8 +652,35 @@ namespace multi_theory_horn {
                     }
                     else {
                         unsigned bv_size = current_solver->get_bv_size();
+                        bool requires_preprocessing = false;
+                        unsigned extended_size = bv_size - 1;
+                        bool force_preprocess = !(is_signed) && m_int2bv_preprocess;
+                        if (!force_preprocess) {
+                            // We try to avoid preprocessing here to not complicate the strengthening expressions.
+                            // TODO: Place this logic in the translator.
+                            do {
+                                extended_size += 1;
+                                Int2BvPreprocessor preprocessor(m_ctx, bv_size, is_signed);
+                                preprocessor.set_bounds_bv_size(extended_size);
+                                DEBUG_MSG(OUT() << "Checking if phi requires extension for bv size " 
+                                                << extended_size << std::endl);
+                                requires_preprocessing = preprocessor.requires_preprocessing(p_interp);
+                            } while (requires_preprocessing);
+                            assert(extended_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
+                        }
+
                         Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify, var_map);
-                        p_interp_trans = int2bv_t.translate(p_interp, /*preprocess*/ m_int2bv_preprocess);
+                        p_interp_trans = int2bv_t.translate(p_interp, /*preprocess*/ force_preprocess);
+
+                        if (!force_preprocess) {
+                            if (extended_size > bv_size) {
+                                DEBUG_MSG(OUT() << "Extending " << p_interp_trans << "\nFrom size " 
+                                                << bv_size << " to size " << extended_size << std::endl);
+                                p_interp_trans = extend_bv_expr(p_interp_trans, is_signed, bv_size, extended_size);
+                            } else {
+                                DEBUG_MSG(OUT() << "No overflow detected" << std::endl);
+                            }
+                        }
                     }
                     DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << p_interp_trans << std::endl);
 
