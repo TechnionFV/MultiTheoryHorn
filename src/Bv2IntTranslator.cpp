@@ -319,7 +319,7 @@ namespace multi_theory_horn {
                 unsigned high = e.hi();
                 unsigned low = e.lo();
                 k = high - low + 1;
-                unsigned divL = (uint64_t)1 << (low);
+                uint64_t divL = (uint64_t)1 << (low);
                 r = umod(args[0] / ctx.int_val(divL), high - low + 1);
                 break;
             }
