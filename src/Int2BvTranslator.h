@@ -18,8 +18,10 @@ namespace multi_theory_horn {
     class Int2BvTranslator {
         z3::context&      ctx;
         unsigned          m_bv_size; // Size of the BV type to translate to
+        unsigned          m_extended_bv_size; // Size of extended BV width for vars and constants.
         bool              m_is_signed; // Whether to treat integers as signed or unsigned
         bool              m_simplify; // Whether to simplify the translated expressions
+        bool              m_is_vars_signed; // Whether to treat variables as signed or unsigned
         
         z3::expr_vector m_vars;
         // A map which tells us where to map each variable we find
@@ -58,5 +60,9 @@ namespace multi_theory_horn {
         
         // Accessors for the collected vars
         const z3::expr_vector& vars() const { return m_vars; }
+
+        // Allow constant translation to different bit-vector sizes than the base
+        void set_extended_bv_size(unsigned size);
+        void set_is_vars_signed(bool is_signed) { m_is_vars_signed = is_signed; }
     };
 } // namespace multi_theory_horn

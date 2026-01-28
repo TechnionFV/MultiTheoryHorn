@@ -670,17 +670,9 @@ namespace multi_theory_horn {
                         }
 
                         Int2BvTranslator int2bv_t(m_ctx, true /*is_signed*/, bv_size, m_simplify, var_map);
+                        int2bv_t.set_extended_bv_size(extended_size);
+                        int2bv_t.set_is_vars_signed(is_signed);
                         p_interp_trans = int2bv_t.translate(p_interp, /*preprocess*/ force_preprocess);
-
-                        if (!force_preprocess) {
-                            if (extended_size > bv_size) {
-                                DEBUG_MSG(OUT() << "Extending " << p_interp_trans << "\nFrom size " 
-                                                << bv_size << " to size " << extended_size << std::endl);
-                                p_interp_trans = extend_bv_expr(p_interp_trans, is_signed, bv_size, extended_size);
-                            } else {
-                                DEBUG_MSG(OUT() << "No overflow detected" << std::endl);
-                            }
-                        }
                     }
                     DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << p_interp_trans << std::endl);
 
@@ -753,8 +745,27 @@ namespace multi_theory_horn {
                         translated_vars = bv2int_t.vars();
                     } else {
                         unsigned bv_size = current_solver->get_bv_size();
-                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify);
-                        phi_trans = int2bv_t.translate(phi, /*preprocess*/ m_int2bv_preprocess);
+                        bool requires_preprocessing = false;
+                        bool force_preprocess = false;
+                        unsigned extended_size = is_signed ? bv_size - 1 : bv_size;
+                        if (!force_preprocess) {
+                            // We try to avoid preprocessing here to not complicate the strengthening expressions.
+                            // TODO: Place this logic in the translator.
+                            do {
+                                extended_size += 1;
+                                Int2BvPreprocessor preprocessor(m_ctx, bv_size, is_signed);
+                                preprocessor.set_bounds_bv_size(extended_size);
+                                DEBUG_MSG(OUT() << "Checking if phi requires extension for bv size " 
+                                                << extended_size << std::endl);
+                                requires_preprocessing = preprocessor.requires_preprocessing(phi);
+                            } while (requires_preprocessing);
+                            assert(extended_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
+                        }
+
+                        Int2BvTranslator int2bv_t(m_ctx, true /*is_signed*/, bv_size, m_simplify);
+                        int2bv_t.set_extended_bv_size(extended_size);
+                        int2bv_t.set_is_vars_signed(is_signed);
+                        phi_trans = int2bv_t.translate(phi, /*preprocess*/ force_preprocess);
                         translated_vars = int2bv_t.vars();
                     }
 

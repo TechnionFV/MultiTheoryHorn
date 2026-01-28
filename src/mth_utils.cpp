@@ -304,40 +304,6 @@ namespace multi_theory_horn {
         return evaluate_clause_vars_internal(expr, unknown_vars_subs, unknown_vars);
     }
 
-    z3::expr extend_bv_expr(const z3::expr& expr, bool is_signed, unsigned base_bv, unsigned extension_bv_size) {
-        assert(!expr.is_var() && "The expr should not contain variables");
-        
-        if (expr.num_args() == 0) {
-            if ((expr.is_const() || expr.is_numeral()) && !expr.is_bool()) {
-                // This is a constant variable that should be zero-extended or sign-extended
-                z3::sort var_sort = expr.get_sort();
-                assert(var_sort.is_bv() && "The variable sort should be a bit-vector");
-                unsigned var_bv_size = var_sort.bv_size();
-                assert(var_bv_size == base_bv && "The variable bit-vector size should match the base bit-vector size");
-                assert(extension_bv_size > base_bv && "The extension size should be greater than the variable size");
-                unsigned extension_diff = extension_bv_size - base_bv;
-                if (is_signed || expr.is_numeral())
-                    return z3::sext(expr, extension_diff);
-                else
-                    return z3::zext(expr, extension_diff);
-            }
-
-            // Otherwise return as is
-            return expr;
-        }
-
-        z3::expr_vector args = expr.args();
-        z3::expr_vector new_args(expr.ctx());
-        unsigned args_size = args.size();
-        for (unsigned i = 0; i < args_size; ++i) {
-            z3::expr arg = args[i];
-            z3::expr extended_arg = extend_bv_expr(arg, is_signed, base_bv, extension_bv_size);
-            new_args.push_back(extended_arg);
-        }
-
-        return utils::get_bv_app_based_on_decl(expr.ctx(), expr.decl().decl_kind(), new_args);
-    }
-
     // ====================================================================
     // MTHSolver methods
     // ====================================================================
