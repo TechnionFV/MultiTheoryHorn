@@ -153,13 +153,8 @@ namespace multi_theory_horn {
     }
 
     z3::expr Int2BvPreprocessor::create_arith_bounds_expr(const z3::expr& term) const {
-        if (m_is_signed) {
-            int64_t N = (int64_t)1 << (m_bounds_bv_size - 1);
-            return (term >= m_ctx.int_val(-N)) && (term <= m_ctx.int_val(N - 1));
-        }
-
-        int64_t N = (uint64_t)1 << m_bounds_bv_size;
-        return (term >= m_ctx.int_val(0)) && (term <= m_ctx.int_val(N - 1));
+        int64_t N = (int64_t)1 << (m_bounds_bv_size - 1);
+        return (term >= m_ctx.int_val(-N)) && (term <= m_ctx.int_val(N - 1));
     }
 
     z3::expr Int2BvPreprocessor::create_var_bounds_expr(const z3::expr& var) const {
@@ -174,16 +169,8 @@ namespace multi_theory_horn {
 
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
-        if (m_is_signed) {
-            int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bounds_bv_size);
-            int64_t upper_bound = utils::get_signed_bv_upper_bound(m_bounds_bv_size);
-            return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
-        }
-
-        uint64_t upper_bound = utils::get_unsigned_bv_upper_bound(m_bounds_bv_size);
-        uint64_t lower_bound = utils::get_unsigned_bv_lower_bound(m_bounds_bv_size);
-        assert(m_bounds_bv_size <= 64 && "Unexpected bv size");
-        int64_t raw = const_e.get_numeral_int64();
+        int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bounds_bv_size);
+        int64_t upper_bound = utils::get_signed_bv_upper_bound(m_bounds_bv_size);
         return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
     }
 

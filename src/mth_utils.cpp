@@ -308,14 +308,6 @@ namespace multi_theory_horn {
         assert(!expr.is_var() && "The expr should not contain variables");
         
         if (expr.num_args() == 0) {
-            // if (expr.is_numeral()) {
-            //     uint64_t raw = expr.get_numeral_uint64();
-            //     if (is_signed) {
-            //         int64_t extended_raw = utils::sign_extend(raw, extension_bv_size);
-            //         return expr.ctx().bv_val(extended_raw, extension_bv_size);
-            //     }
-            //     return expr.ctx().bv_val(raw, extension_bv_size);
-            // }
             if ((expr.is_const() || expr.is_numeral()) && !expr.is_bool()) {
                 // This is a constant variable that should be zero-extended or sign-extended
                 z3::sort var_sort = expr.get_sort();
@@ -324,7 +316,7 @@ namespace multi_theory_horn {
                 assert(var_bv_size == base_bv && "The variable bit-vector size should match the base bit-vector size");
                 assert(extension_bv_size > base_bv && "The extension size should be greater than the variable size");
                 unsigned extension_diff = extension_bv_size - base_bv;
-                if (is_signed)
+                if (is_signed || expr.is_numeral())
                     return z3::sext(expr, extension_diff);
                 else
                     return z3::zext(expr, extension_diff);

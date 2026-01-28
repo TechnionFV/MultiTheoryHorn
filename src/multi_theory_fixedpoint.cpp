@@ -653,8 +653,8 @@ namespace multi_theory_horn {
                     else {
                         unsigned bv_size = current_solver->get_bv_size();
                         bool requires_preprocessing = false;
-                        unsigned extended_size = bv_size - 1;
-                        bool force_preprocess = !(is_signed) && m_int2bv_preprocess;
+                        bool force_preprocess = false;
+                        unsigned extended_size = is_signed ? bv_size - 1 : bv_size;
                         if (!force_preprocess) {
                             // We try to avoid preprocessing here to not complicate the strengthening expressions.
                             // TODO: Place this logic in the translator.
@@ -669,7 +669,7 @@ namespace multi_theory_horn {
                             assert(extended_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
                         }
 
-                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify, var_map);
+                        Int2BvTranslator int2bv_t(m_ctx, true /*is_signed*/, bv_size, m_simplify, var_map);
                         p_interp_trans = int2bv_t.translate(p_interp, /*preprocess*/ force_preprocess);
 
                         if (!force_preprocess) {
