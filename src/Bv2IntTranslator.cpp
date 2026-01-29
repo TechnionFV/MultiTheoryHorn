@@ -326,7 +326,7 @@ namespace multi_theory_horn {
             case Z3_OP_BIT2BOOL: {
                 z3::parameter p(e, 0);
                 unsigned bit_index = p.get_int();
-                unsigned divL = (uint64_t)1 << (bit_index);
+                uint64_t divL = (uint64_t)1 << (bit_index);
                 r = (umod(args[0] / ctx.int_val(divL), 1) == ctx.int_val(1));
                 break;
             }
