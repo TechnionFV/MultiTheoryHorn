@@ -7,8 +7,10 @@ namespace multi_theory_horn {
     Int2BvTranslator::Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size, bool simplify, const VarMap& int2bv_var_map) : 
         ctx(c),
         m_is_signed(is_signed),
+        m_is_vars_signed(is_signed),
         m_vars(c),
         m_bv_size(bv_size),
+        m_extended_bv_size(bv_size),
         m_simplify(simplify),
         m_int2bv_var_map(int2bv_var_map)
     {}
@@ -93,7 +95,7 @@ namespace multi_theory_horn {
             case Z3_OP_ANUM:
                 // Translate numeral to BV
                 assert(e.is_numeral() && "Z3_OP_ANUM should only be used with numerals");
-                r = ctx.bv_val(e.get_numeral_int64(), m_bv_size);
+                r = ctx.bv_val(e.get_numeral_int64(), m_extended_bv_size);
                 break;
             case Z3_OP_AGNUM:
             case Z3_OP_TO_REAL:
@@ -182,8 +184,19 @@ namespace multi_theory_horn {
                 name = e.decl().name().str();
             r = ctx.bv_const(name.c_str(), m_bv_size);
         }
-        
+
         m_vars.push_back(r);
+
+        if (m_extended_bv_size > m_bv_size) {
+            if (m_is_vars_signed) {
+                // Sign-extend to the extended size
+                r = z3::sext(r, m_extended_bv_size - m_bv_size);
+            } else {
+                // Zero-extend to the extended size
+                r = z3::zext(r, m_extended_bv_size - m_bv_size);
+            }
+        }
+        
         return r;
     }
 
@@ -205,6 +218,11 @@ namespace multi_theory_horn {
         z3::expr preprocessed = preprocessor.preprocess(e);
         DEBUG_MSG(OUT() << "Preprocessed expr: " << preprocessed << "\n");
         return translate_aux(preprocessed);
+    }
+
+    void Int2BvTranslator::set_extended_bv_size(unsigned size) {
+        assert(size >= m_bv_size && "Extended size must be larger than base bv size");
+        m_extended_bv_size = size;
     }
 
 } // namespace multi_theory_horn
