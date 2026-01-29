@@ -28,7 +28,7 @@ namespace multi_theory_horn {
 
     bool Int2BvTranslator::is_int_relation(const z3::expr& e) const {
         Z3_decl_kind f = e.decl().decl_kind();
-        bool has_int_arg = any_of(e.args(), [&](z3::expr arg) { return arg.is_int(); });
+        bool has_int_arg = utils::any_of(e.args(), [&](z3::expr arg) { return arg.is_int(); });
         return Z3_OP_LE <= f && f <= Z3_OP_GT && has_int_arg;
     }
 
@@ -47,24 +47,11 @@ namespace multi_theory_horn {
             UNREACHABLE();
         }
         else if (e.is_var()) {
-            // This should be unreachable as we declare variables
-            // as constants (0-arity apps)
-            UNREACHABLE();
+            r = translate_const_variable(e);
         }
         else { // is_app
             if (e.is_const() && !e.is_numeral() && !e.is_bool()) {
-                // Note: numerals are handled in translate_bv: Z3_OP_ANUM
-                // Constants are apps with no arguments
-                std::string name = e.decl().name().str();
-                if (m_int2bv_var_map.find(e.decl()) != m_int2bv_var_map.end()) {
-                    // If we have a mapping for this constant use it
-                    r = ctx.bv_const(name.c_str(), m_bv_size);
-                } else {
-                    // Otherwise, create a new BV constant
-                    r = ctx.bv_const(name.c_str(), m_bv_size);
-                }
-                
-                m_vars.push_back(r);
+                r = translate_const_variable(e);
             }
             else if (is_special_basic(e)) {
                 r = translate_special_basic(e);
@@ -177,6 +164,27 @@ namespace multi_theory_horn {
             return lhs == rhs;
         }
         return e;
+    }
+
+    z3::expr Int2BvTranslator::translate_const_variable(const z3::expr& e) {
+        // Note: numerals are handled in translate_bv: Z3_OP_ANUM
+        // Constants are apps with no arguments
+        z3::expr r(ctx);
+        if (m_int2bv_var_map.find(e) != m_int2bv_var_map.end()) {
+            // If we have a mapping for this constant use it
+            r = m_int2bv_var_map.at(e);
+        } else {
+            // Otherwise, create a new BV constant
+            std::string name;
+            if (e.is_var())
+                name = fresh_var_name + std::to_string(var_count++);
+            else
+                name = e.decl().name().str();
+            r = ctx.bv_const(name.c_str(), m_bv_size);
+        }
+        
+        m_vars.push_back(r);
+        return r;
     }
 
     z3::expr Int2BvTranslator::translate_basic(const z3::expr& e) {

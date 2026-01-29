@@ -26,6 +26,9 @@ namespace multi_theory_horn {
         // in the expressions given through the translate method
         VarMap m_int2bv_var_map;
 
+        const std::string fresh_var_name = "__bv_var__";
+        unsigned var_count = 0;
+
         // This map is used to cache translations
         std::unordered_map<Z3_ast, z3::expr, AstHash, AstEq> m_translate;
 
@@ -37,6 +40,7 @@ namespace multi_theory_horn {
         z3::expr translate_int(const z3::expr& e);
         z3::expr translate_basic(const z3::expr& e);
         z3::expr translate_special_basic(const z3::expr& e);
+        z3::expr translate_const_variable(const z3::expr& e);
 
         z3::expr translate_aux(const z3::expr& e);
 
