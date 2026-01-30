@@ -465,12 +465,23 @@ namespace multi_theory_horn {
         }
     }
 
+    void MT_fixedpoint::set_params_for_all_engines() {
+        z3::params params = (m_params_set) ? m_params : get_default_mth_fp_params(m_ctx);
+        DEBUG_MSG(OUT() << "Setting parameters for all fixedpoint engines:\n" << params << std::endl);
+        if (m_mth_fp_set.hasBVSolver())
+            m_mth_fp_set.getBVSolver().fp_solver.set(params);
+
+        for (auto& [bv_size, iauf_solver] : m_mth_fp_set.getIAUFSolvers())
+            iauf_solver.fp_solver.set(params);
+    }
+
     //==============================================================================
     //                              PUBLIC METHODS
     //==============================================================================
     MT_fixedpoint::MT_fixedpoint(z3::context& ctx, bool force_preprocess, bool simplify)
         : m_ctx(ctx), m_mth_fp_set(ctx), m_original_clauses(ctx),
-          m_int2bv_preprocess(force_preprocess), m_simplify(simplify) {}
+          m_int2bv_preprocess(force_preprocess), m_simplify(simplify),
+          m_params(ctx), m_params_set(false) {}
 
     void MT_fixedpoint::from_solver(z3::fixedpoint& fp) {
         DEBUG_MSG(OUT() << "Importing rules from fixedpoint solver:\n" << fp << std::endl);
@@ -504,6 +515,11 @@ namespace multi_theory_horn {
         return;
     }
 
+    void MT_fixedpoint::set(z3::params const & p) {
+        m_params = p;
+        m_params_set = true;
+    }
+
     z3::check_result MT_fixedpoint::query(z3::expr& query) {
         DEBUG_MSG(OUT() << "Analyzing query:\n" << query << std::endl);
         ClauseAnalysisResult query_analysis = analyze_clause(m_ctx, query);
@@ -518,6 +534,7 @@ namespace multi_theory_horn {
         
         // Generate interface constraints
         generate_interface_constraints();
+        set_params_for_all_engines();
         DEBUG_MSG(OUT() << "The set of solvers after interface constraint generation:\n" << m_mth_fp_set << std::endl);
 
         struct QueryConfig {
