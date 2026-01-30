@@ -161,9 +161,6 @@ namespace multi_theory_horn {
         }
     };
 
-    // TODO: Delete this when not needed.
-    enum class Theory { IAUF, BV };
-
     struct MTHSolver {
         z3::fixedpoint fp_solver;
         z3::expr query;
