@@ -4,11 +4,16 @@
 
 namespace multi_theory_horn {
 
-    Int2BvTranslator::Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size, bool simplify, const VarMap& int2bv_var_map) : 
+    Int2BvTranslator::Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size,
+                                       bool force_preprocess, bool simplify,
+                                       const VarMap& int2bv_var_map) :
         ctx(c),
         m_is_signed(is_signed),
+        m_is_vars_signed(is_signed),
         m_vars(c),
         m_bv_size(bv_size),
+        m_extended_bv_size(bv_size),
+        m_force_preprocess(force_preprocess),
         m_simplify(simplify),
         m_int2bv_var_map(int2bv_var_map)
     {}
@@ -93,7 +98,7 @@ namespace multi_theory_horn {
             case Z3_OP_ANUM:
                 // Translate numeral to BV
                 assert(e.is_numeral() && "Z3_OP_ANUM should only be used with numerals");
-                r = ctx.bv_val(e.get_numeral_int64(), m_bv_size);
+                r = ctx.bv_val(e.get_numeral_int64(), m_extended_bv_size);
                 break;
             case Z3_OP_AGNUM:
             case Z3_OP_TO_REAL:
@@ -182,8 +187,19 @@ namespace multi_theory_horn {
                 name = e.decl().name().str();
             r = ctx.bv_const(name.c_str(), m_bv_size);
         }
-        
+
         m_vars.push_back(r);
+
+        if (m_extended_bv_size > m_bv_size) {
+            if (m_is_vars_signed) {
+                // Sign-extend to the extended size
+                r = z3::sext(r, m_extended_bv_size - m_bv_size);
+            } else {
+                // Zero-extend to the extended size
+                r = z3::zext(r, m_extended_bv_size - m_bv_size);
+            }
+        }
+
         return r;
     }
 
@@ -198,13 +214,35 @@ namespace multi_theory_horn {
         return e.decl()(new_args);
     }
 
-    z3::expr Int2BvTranslator::translate(const z3::expr& e, bool preprocess) {
-        if (!preprocess)
+    z3::expr Int2BvTranslator::translate(const z3::expr& e, bool handle_overflow) {
+        if (!handle_overflow)
             return translate_aux(e);
-        Int2BvPreprocessor preprocessor(ctx, m_bv_size, m_is_signed);
-        z3::expr preprocessed = preprocessor.preprocess(e);
-        DEBUG_MSG(OUT() << "Preprocessed expr: " << preprocessed << "\n");
-        return translate_aux(preprocessed);
-    }
 
+        Int2BvPreprocessor preprocessor(ctx, m_bv_size, m_is_signed);
+        z3::expr expr_to_translate = e;
+        if (m_force_preprocess) {
+            expr_to_translate = preprocessor.preprocess(e);
+            DEBUG_MSG(OUT() << "Preprocessed expr: " << expr_to_translate << "\n");
+        }
+        else {
+            // We try to avoid preprocessing here by translating to larger
+            // bit-vectors only if necessary.
+            // Set the extended bv size based on the signedness.
+            m_extended_bv_size = m_is_signed ? m_bv_size - 1 : m_bv_size;
+            bool requires_extension = false;
+            do {
+                m_extended_bv_size += 1;
+                DEBUG_MSG(OUT() << "Checking if phi requires extension for bv size "
+                                << m_extended_bv_size << std::endl);
+                requires_extension = preprocessor.overflows(e, m_extended_bv_size);
+            } while (requires_extension);
+
+            // In this case, always translate as though we translating
+            // signed expressions.
+            m_is_signed = true;
+            assert(m_extended_bv_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
+        }
+
+        return translate_aux(expr_to_translate);
+    }
 } // namespace multi_theory_horn
