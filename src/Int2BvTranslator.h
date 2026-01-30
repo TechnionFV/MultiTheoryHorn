@@ -20,12 +20,20 @@ namespace multi_theory_horn {
         unsigned          m_bv_size; // Size of the BV type to translate to
         bool              m_is_signed; // Whether to treat integers as signed or unsigned
         bool              m_simplify; // Whether to simplify the translated expressions
-        
-        z3::expr_vector m_vars;
+        bool              m_force_preprocess; // Whether to always preprocess expressions when handling overflow
         // A map which tells us where to map each variable we find
         // in the expressions given through the translate method
         VarMap m_int2bv_var_map;
 
+        // Size of extended BV width for vars and constants.
+        // By default, it is equal to m_bv_size.
+        // It's used to avoid expressions that are prone to overflow/underflow.
+        unsigned          m_extended_bv_size;
+        // Whether to treat variables as signed or unsigned
+        // when extending them to m_extended_bv_size.
+        bool              m_is_vars_signed;
+        
+        z3::expr_vector m_vars;
         const std::string fresh_var_name = "__bv_var__";
         unsigned var_count = 0;
 
@@ -46,7 +54,8 @@ namespace multi_theory_horn {
 
     public:
         explicit Int2BvTranslator(z3::context& c, bool is_signed,
-                                  unsigned bv_size, bool simplify = true,
+                                  unsigned bv_size, bool force_preprocess,
+                                  bool simplify = true,
                                   const VarMap& bv2int_var_map = VarMap());
 
         // This must be invoked before starting a new translation
@@ -54,7 +63,7 @@ namespace multi_theory_horn {
         void reset();
 
         // Translate any expr; caches results in m_translate
-        z3::expr translate(const z3::expr& e, bool preprocess = false);
+        z3::expr translate(const z3::expr& e, bool handle_overflow = false);
         
         // Accessors for the collected vars
         const z3::expr_vector& vars() const { return m_vars; }

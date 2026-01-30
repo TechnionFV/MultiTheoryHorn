@@ -592,7 +592,8 @@ namespace multi_theory_horn {
 
         struct QueryConfig {
             z3::expr query;
-            // TODO: Make sure we're only dealing with linear CHCs.
+            // If in the future we want to supprt non-linear CHCs,
+            // we need to change p to be a vector of expressions.
             z3::expr p;
             MTHSolver* solver;
             QueryConfig(z3::expr& _query, z3::expr& _p, MTHSolver* _solver)
@@ -652,8 +653,8 @@ namespace multi_theory_horn {
                     }
                     else {
                         unsigned bv_size = current_solver->get_bv_size();
-                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify, var_map);
-                        p_interp_trans = int2bv_t.translate(p_interp, /*preprocess*/ m_int2bv_preprocess);
+                        Int2BvTranslator int2bv_t(m_ctx, is_signed /*is_signed*/, bv_size, /*force_preprocess*/ m_int2bv_preprocess, m_simplify, var_map);
+                        p_interp_trans = int2bv_t.translate(p_interp, /*handle_overflow*/ true);
                     }
                     DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << p_interp_trans << std::endl);
 
@@ -726,8 +727,8 @@ namespace multi_theory_horn {
                         translated_vars = bv2int_t.vars();
                     } else {
                         unsigned bv_size = current_solver->get_bv_size();
-                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify);
-                        phi_trans = int2bv_t.translate(phi, /*preprocess*/ m_int2bv_preprocess);
+                        Int2BvTranslator int2bv_t(m_ctx, true /*is_signed*/, bv_size, /*force_preprocess*/ m_int2bv_preprocess, m_simplify);
+                        phi_trans = int2bv_t.translate(phi, /*handle_overflow*/ true);
                         translated_vars = int2bv_t.vars();
                     }
 
@@ -806,8 +807,8 @@ namespace multi_theory_horn {
                         DEBUG_MSG(OUT() << "Interpretation of " << p_decl.name() << ":\n" << p_interp << std::endl);
 
                         // Initialize the translator
-                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify);
-                        z3::expr bv_p_interp = int2bv_t.translate(p_interp, /*preprocess*/ m_int2bv_preprocess);
+                        Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_int2bv_preprocess, m_simplify);
+                        z3::expr bv_p_interp = int2bv_t.translate(p_interp, /*handle_overflow*/ true);
                         DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << bv_p_interp << std::endl);
 
                         // Strengthen the strengthening expression
@@ -888,7 +889,7 @@ namespace multi_theory_horn {
                     z3::expr g_refutation = engine_int().get_answer();
                     DEBUG_MSG(OUT() << "Refutation:\n" << g_refutation << std::endl);
 
-                    Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_simplify);
+                    Int2BvTranslator int2bv_t(m_ctx, is_signed, bv_size, m_int2bv_preprocess, m_simplify);
                     
                     // Extract the refutation leaf predicate
                     z3::expr q = get_refutation_leaf_pred(g_refutation);
@@ -904,7 +905,7 @@ namespace multi_theory_horn {
                         z3::expr phi = get_refutation_leaf_phi(q, original_vars);
                         DEBUG_MSG(OUT() << "phi: " << phi << std::endl);
 
-                        z3::expr phi_trans = int2bv_t.translate(phi, /*preprocess*/ m_int2bv_preprocess);
+                        z3::expr phi_trans = int2bv_t.translate(phi, /*handle_overflow*/ true);
                         DEBUG_MSG(OUT() << "Translated phi: " << phi_trans << std::endl);
                         z3::expr_vector translated_vars = int2bv_t.vars();
                         
