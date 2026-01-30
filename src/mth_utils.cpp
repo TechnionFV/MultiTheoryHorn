@@ -338,7 +338,6 @@ namespace multi_theory_horn {
     MTHSolver& MTHFixedpointSet::getOrInitBVSolver() {
         if (!bv_solver.has_value()) {
             MTHSolver new_solver(ctx, /*is_bv*/ true);
-            new_solver.fp_solver.set(get_default_mth_fp_params(ctx));
             bv_solver.emplace(std::move(new_solver));
         }
         return *bv_solver;
@@ -360,8 +359,6 @@ namespace multi_theory_horn {
             return it->second;
 
         MTHSolver new_solver(ctx, /*is_bv*/ false, bv_size);
-        new_solver.fp_solver.set(get_default_mth_fp_params(ctx));
-
         auto result = iauf_solvers.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(bv_size),

@@ -22,7 +22,12 @@ namespace multi_theory_horn {
         // Whether to preprocess integer translator formulas (default: false)
         bool m_int2bv_preprocess;
 
+        // The set of fixedpoint solvers
         MTHFixedpointSet m_mth_fp_set;
+        // The parameters for all the engines
+        bool m_params_set;
+        z3::params m_params;
+
         z3::expr_vector m_original_clauses;
         std::map<z3::expr, ClauseAnalysisResult, compare_expr> m_clause_analysis_map;
         PredicateMap m_interface_constraint_map;
@@ -90,6 +95,10 @@ namespace multi_theory_horn {
         /// populated fixedpoint engines.
         void generate_interface_constraints();
 
+        /// @brief Sets the parameters for all fixedpoint engines.
+        /// If m_params_set is true, uses m_params. Otherwise, uses default parameters.
+        void set_params_for_all_engines();
+
     public:
 
         //--------------------------------------------------------------------------
@@ -114,6 +123,10 @@ namespace multi_theory_horn {
         /// @brief Register a relation (predicate) in the appropriate fixedpoint engine.
         /// @param p The predicate to register.
         void register_relation(z3::func_decl& p);
+
+        /// @brief Set parameters for both all fixedpoint engines.
+        /// @param p The parameters to set.
+        void set(z3::params const & p);
 
         /// @brief The query method for the multi-theory fixedpoint engine.
         /// @param query The query expression.
