@@ -7,6 +7,8 @@
 #include "utils.h"
 
 namespace multi_theory_horn {
+    static constexpr unsigned MAX_MTH_BV_SIZE = 63;
+
     // Centralized output sinks (default to std::cout/std::cerr)
     inline std::ostream* g_out = &std::cout;
     inline std::ostream* g_err = &std::cerr;

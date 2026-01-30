@@ -29,7 +29,12 @@ using namespace z3;
 using namespace multi_theory_horn;
 
 // -------- Helpers --------
-bool gno_int2bv_preprocess = false;
+// By default, we opt not to preprocess the int2bv
+// expressions due to the expression size overhead.
+// In order to be able to test the preprocessing option,
+// we expose this global flag which is passed to the
+// MTH solver.
+bool gforce_preprocess = false;
 // -------- Helpers --------
 
 params get_bv_params(context& c) {
@@ -108,7 +113,7 @@ check_result max_inv(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query); 
     } else { // bv only
@@ -182,7 +187,7 @@ check_result opposite_signs(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -274,7 +279,7 @@ check_result opposite_signs_diff(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query); 
     } else { // bv only
@@ -359,7 +364,7 @@ check_result opposite_signs_diff2(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -434,7 +439,7 @@ check_result abs_ge(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: p --> p^{size}
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -519,7 +524,7 @@ check_result abs_sum(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -590,7 +595,7 @@ check_result cond_negate(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: q^{size} --> q
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -682,7 +687,7 @@ check_result cond_negate_diff(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -770,7 +775,7 @@ check_result swap(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -861,7 +866,7 @@ check_result swap_sum(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -929,7 +934,7 @@ check_result turn_off_rm1(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: q^{size} --> q
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -1020,7 +1025,7 @@ check_result turn_on_lsb(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: r^{size} --> r
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -1120,7 +1125,7 @@ check_result max_inv_concat(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query); 
     } else { // bv only
@@ -1228,7 +1233,7 @@ check_result opposite_signs_concat(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{2*size}, s^{2*size} --> s
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -1328,7 +1333,7 @@ check_result abs_concat(unsigned int size, bool is_multi) {
     
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{size + 1}, s^{size + 1} --> s
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -1438,7 +1443,7 @@ check_result cond_negate_concat(unsigned int size, bool is_multi) {
 
     if (is_multi) {
         // interface constraints: q^{size} --> q, r --> r^{2*size}, s^{2*size} --> s
-        MT_fixedpoint mtfp(c);
+        MT_fixedpoint mtfp(c, gforce_preprocess);
         mtfp.from_solver(fp);
         result = mtfp.query(query);
     } else { // bv only
@@ -1474,14 +1479,14 @@ static void print_help() {
         "Usage:\n"
         "  benchmarks --bench <name> --size <k>\n"
         "Options:\n"
-        "  --bench <name>   Benchmark to run (see --list)\n"
-        "  --size  <k>      Bit-vector size (unsigned integer > 0)\n"
-        "  --multi          Use the underlying multi-theory solver"
-        "  --list           Print enabled benchmarks\n"
-        "  --help           Show this help\n"
-        "  --quiet          Don't print anything\n"
-        "  --brunch         Print results in BRUNCH_STAT format (bench, size, result)\n"
-        "  --no_preprocess  Don't preprocess int2bv translator inputs\n"
+        "  --bench <name>       Benchmark to run (see --list)\n"
+        "  --size  <k>          Bit-vector size (unsigned integer > 0)\n"
+        "  --multi              Use the underlying multi-theory solver"
+        "  --list               Print enabled benchmarks\n"
+        "  --help               Show this help\n"
+        "  --quiet              Don't print anything\n"
+        "  --brunch             Print results in BRUNCH_STAT format (bench, size, result)\n"
+        "  --force_preprocess   Force expression preprocessing instead of overflow check\n"
         "  --output <file>  Redirect output to given file\n"
         "\n"
         "Exit codes: 0=SAT, 1=UNSAT, 2=UNKNOWN, 3=error\n";
@@ -1548,8 +1553,8 @@ static int run_benchmarks_cli(int argc, char** argv) {
             brunch = true;
         } else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
             output_path = argv[++i];
-        } else if (std::strcmp(argv[i], "--no_preprocess") == 0) {
-            gno_int2bv_preprocess = true;
+        } else if (std::strcmp(argv[i], "--force_preprocess") == 0) {
+            gforce_preprocess = true;
         } else if (std::strcmp(argv[i], "--debug") == 0) {
             // hidden dev option
             set_mtfp_debug(true);
