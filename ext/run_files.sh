@@ -49,7 +49,7 @@ CMD=(python3 "${BRUNCH}" \
   --mem "${MEMOUT}" \
   --format "${FORMAT_FIELDS}" \
   "${SPEC}" \
-  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch)
+  -- "${BENCHBIN}" --bench "{bench}" --size "{size}" "{multi}" --brunch)
 
 if [[ "${DEBUG}" == "true" ]]; then
   CMD+=("--debug")

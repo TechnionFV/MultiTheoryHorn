@@ -8,8 +8,11 @@ set -euo pipefail
 TIMEOUT=7200   # CPU time limit in seconds (2 hours)
 MEMOUT=16384   # Memory limit in MB (16 GB)
 SIZE_MIN=4
-SIZE_MAX=63
+SIZE_MAX=63    # inclusive
 SIZE_STEP=1
+
+# Benchmark type filter (all/multi/bv)
+TYPE="all"
 
 # debug mode (true/false) - adds more logging
 # It is recommended to keep this false as it may clutter output files
@@ -84,7 +87,15 @@ fi
 for (( sz=SIZE_MIN; sz<=SIZE_MAX; sz+=SIZE_STEP )); do
   for b in "${BENCHES[@]}"; do
     [[ -z "$b" ]] && continue
-    echo "${b}:${sz}" >> "${SPECS_FILE}"
+    # Concatenate :multi or :bv to the spec based on TYPE
+    if [[ "${TYPE}" == "multi" ]]; then
+      echo "${b}:${sz}:multi" >> "${SPECS_FILE}"
+    elif [[ "${TYPE}" == "bv" ]]; then
+      echo "${b}:${sz}:bv" >> "${SPECS_FILE}"
+    else
+      echo "${b}:${sz}:multi" >> "${SPECS_FILE}"
+      echo "${b}:${sz}:bv" >> "${SPECS_FILE}"
+    fi
   done
 done
 
@@ -147,7 +158,7 @@ else
       --mem "${MEMOUT}" \
       --format "${FORMAT_FIELDS}" \
       "${SPEC}" \
-      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
+      -- "${BENCHBIN}" --bench "{bench}" --size "{size}" "{multi}" --brunch $( [[ "${DEBUG}" == "true" ]] && echo "--debug" )
 
     rc=$? # capture return code of the python call
     if [[ $rc -ne 0 ]]; then

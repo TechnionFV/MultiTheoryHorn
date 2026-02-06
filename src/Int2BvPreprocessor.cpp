@@ -73,7 +73,8 @@ namespace multi_theory_horn {
         m_ctx(c),
         m_bv_size(bv_size),
         m_is_signed(is_signed),
-        m_vars_bound_lemmas(c)
+        m_vars_bound_lemmas(c),
+        m_bv_size_extended(bv_size)
     {}
 
     void Int2BvPreprocessor::reset() {
@@ -82,20 +83,6 @@ namespace multi_theory_horn {
         m_const_out_of_bounds.clear();
         m_func_app_out_of_bounds.clear();
         m_literals.clear();
-    }
-
-    int Int2BvPreprocessor::calc_num_of_conjuncts(const z3::expr& e) const {
-        if (e.is_and()) {
-            return e.num_args();
-        }
-        return 1;
-    }
-
-    int Int2BvPreprocessor::calc_num_of_disjuncts(const z3::expr& e) const {
-        if (e.is_or()) {
-            return e.num_args();
-        }
-        return 1;
     }
 
     bool Int2BvPreprocessor::is_const_variable(const z3::expr& e) const {
@@ -108,12 +95,12 @@ namespace multi_theory_horn {
         z3::expr res(m_ctx);
 
         if (m_is_signed) {
-            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
+            int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bv_size_extended);
             switch (e_kind) {
                 case Z3_OP_ADD:
                 case Z3_OP_SUB:
                 case Z3_OP_MUL:
-                    res = !create_bounds_expr(e);
+                    res = !create_arith_bounds_expr(e);
                     break;
                 case Z3_OP_UMINUS:
                     res = (e.arg(0) == m_ctx.int_val(lower_bound));
@@ -127,7 +114,7 @@ namespace multi_theory_horn {
             }
         }
         else {
-            uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
+            uint64_t upper_bound = utils::get_unsigned_bv_upper_bound(m_bv_size_extended);
             switch (e_kind) {
                 case Z3_OP_ADD:
                     res = (e > m_ctx.int_val(upper_bound));
@@ -164,33 +151,32 @@ namespace multi_theory_horn {
             func_app_out_of_bounds.push_back(out_of_bounds_expr);
         }
     }
-    
-    z3::expr Int2BvPreprocessor::create_bounds_expr(const z3::expr& term) const {
+
+    z3::expr Int2BvPreprocessor::create_arith_bounds_expr(const z3::expr& term) const {
+        int64_t N = (int64_t)1 << (m_bv_size_extended - 1);
+        return (term >= m_ctx.int_val(-N)) && (term <= m_ctx.int_val(N - 1));
+    }
+
+    z3::expr Int2BvPreprocessor::create_var_bounds_expr(const z3::expr& var) const {
         if (m_is_signed) {
             int64_t N = (int64_t)1 << (m_bv_size - 1);
-            return (term >= m_ctx.int_val(-N)) && (term <= m_ctx.int_val(N - 1));
+            return (var >= m_ctx.int_val(-N)) && (var <= m_ctx.int_val(N - 1));
         }
 
         int64_t N = (uint64_t)1 << m_bv_size;
-        return (term >= m_ctx.int_val(0)) && (term <= m_ctx.int_val(N - 1));
+        return (var >= m_ctx.int_val(0)) && (var <= m_ctx.int_val(N - 1));
     }
 
     bool Int2BvPreprocessor::is_const_in_bounds(const z3::expr& const_e) const {
         assert(const_e.is_numeral() && "Expected a constant expression");
-        if (m_is_signed) {
-            int64_t lower_bound = get_signed_bv_lower_bound(m_bv_size);
-            int64_t upper_bound = get_signed_bv_upper_bound(m_bv_size);
-            return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
-        }
-
-        uint64_t upper_bound = get_unsigned_bv_upper_bound(m_bv_size);
-        uint64_t lower_bound = get_unsigned_bv_lower_bound(m_bv_size);
-        assert(m_bv_size <= 64 && "Unexpected bv size");
+        int64_t lower_bound = utils::get_signed_bv_lower_bound(m_bv_size_extended);
+        int64_t upper_bound = utils::get_signed_bv_upper_bound(m_bv_size_extended);
         return const_e.get_numeral_int64() >= lower_bound && const_e.get_numeral_int64() <= upper_bound;
     }
 
     void Int2BvPreprocessor::populate_data_structures(const z3::expr& e) {
-        int n_conjuncts = calc_num_of_conjuncts(e);
+        // TODO: Make sure the code below is correct as "and" expressions are nested.
+        int n_conjuncts = utils::get_num_conjuncts(e);
 
         m_const_out_of_bounds.resize(n_conjuncts);
         m_func_app_out_of_bounds.resize(n_conjuncts);
@@ -198,7 +184,8 @@ namespace multi_theory_horn {
 
         for (int i = 0; i < n_conjuncts; ++i) {
             z3::expr conjunct = (n_conjuncts == 1) ? e : e.arg(i);
-            int n_disjuncts = calc_num_of_disjuncts(conjunct);
+            // TODO: Make sure the code below is correct as "or" expressions are nested.
+            int n_disjuncts = utils::get_num_disjuncts(conjunct);
 
             m_const_out_of_bounds[i].resize(n_disjuncts, false);
             m_func_app_out_of_bounds[i].resize(n_disjuncts, z3::expr_vector(m_ctx));
@@ -231,7 +218,7 @@ namespace multi_theory_horn {
                  m_handled_vars.find((Z3_ast)literal) == m_handled_vars.end()) {
             // Add the variable to the cache if not already handled
             m_handled_vars.insert((Z3_ast)literal);
-            z3::expr var_bound_expr = create_bounds_expr(literal);
+            z3::expr var_bound_expr = create_var_bounds_expr(literal);
             m_vars_bound_lemmas.push_back(var_bound_expr);
         }
         else {
@@ -387,6 +374,25 @@ namespace multi_theory_horn {
     z3::expr Int2BvPreprocessor::create_UNSAT_out_of_bounds(const z3::expr& e) {
         populate_data_structures(e);
         return create_UNSAT_out_of_bounds_expr(e);
+    }
+
+    bool Int2BvPreprocessor::overflows(const z3::expr& e, unsigned extended_size) {
+        m_bv_size_extended = extended_size;
+        InstCombiner combiner = InstCombiner(m_ctx);
+        // Help the preprocessor by optimizing the expressions
+        // to more "friendly" forms
+        z3::expr e_opt = combiner.combine(e);
+        PRE_DEBUG("Combined input: " << e_opt << "\n");
+
+        // Assume input is in CNF
+        populate_data_structures(e_opt);
+        z3::expr psi = create_SAT_out_of_bounds_expr(e_opt);
+        PRE_DEBUG("psi (SATOutOfBounds): " << psi << "\n");
+        z3::expr psi_tag = create_UNSAT_out_of_bounds_expr(e_opt);
+        PRE_DEBUG("psi_tag (UNSATOutOfBounds): " << psi_tag << "\n");
+
+        // If both psi and psi_tag are false, then there is no overflow
+        return !(psi.is_false() && psi_tag.is_false());
     }
 
     z3::expr Int2BvPreprocessor::preprocess(const z3::expr& e) {
