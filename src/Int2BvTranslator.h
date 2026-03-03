@@ -7,6 +7,7 @@
 #pragma once
 #include "utils.h"
 #include "Int2BvPreprocessor.h"
+#include "Int2BvOverflowAnalyzer.h"
 #include <iostream>
 #include <z3++.h>
 #include <unordered_map>
@@ -44,6 +45,8 @@ namespace multi_theory_horn {
         bool is_basic(const z3::expr& e) const;
         bool is_int_relation(const z3::expr& e) const;
 
+        void determine_extension_config(const z3::expr& e);
+
         // Core translation routines
         z3::expr translate_int(const z3::expr& e);
         z3::expr translate_basic(const z3::expr& e);
@@ -63,7 +66,7 @@ namespace multi_theory_horn {
         void reset();
 
         // Translate any expr; caches results in m_translate
-        z3::expr translate(const z3::expr& e, bool handle_overflow = false);
+        z3::expr translate(const z3::expr& e, bool handle_overflow = true);
         
         // Accessors for the collected vars
         const z3::expr_vector& vars() const { return m_vars; }

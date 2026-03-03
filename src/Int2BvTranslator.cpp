@@ -2,6 +2,8 @@
 
 #include "Int2BvTranslator.h"
 
+#define LDBG(x) DEBUG_MSG(OUT() << "[Int2BvTranslator] " << x)
+
 namespace multi_theory_horn {
 
     Int2BvTranslator::Int2BvTranslator(z3::context& c, bool is_signed, unsigned bv_size,
@@ -214,6 +216,39 @@ namespace multi_theory_horn {
         return e.decl()(new_args);
     }
 
+    void Int2BvTranslator::determine_extension_config(const z3::expr& e) {
+        Int2BvOverflowAnalyzer oa(ctx);
+        unsigned extended_size = 0;
+        if (m_is_signed) {
+            for (unsigned d = 0; d <= MAX_MTH_BV_SIZE - m_bv_size; ++d) {
+                extended_size = m_bv_size + d;
+                if (!oa.overflows(e, /*bv_size_vars*/ m_bv_size, /*bv_size_funcs_consts*/ extended_size, /*is_signed_vars*/ true, /*is_signed_func_consts*/ true)) {
+                    break;
+                }
+                oa.reset();
+            }
+        }
+        else {
+            for (unsigned d = 0; d <= MAX_MTH_BV_SIZE - m_bv_size; ++d) {
+                extended_size = m_bv_size + d;
+                if (d == 0) {
+                    if (!oa.overflows(e, /*bv_size_vars*/ m_bv_size, /*bv_size_funcs_consts*/ extended_size, /*is_signed_vars*/ false, /*is_signed_func_consts*/ false))
+                        break;
+                }
+                else if (!oa.overflows(e, /*bv_size_vars*/ m_bv_size, /*bv_size_funcs_consts*/ extended_size, /*is_signed_vars*/ false, /*is_signed_func_consts*/ true)) {
+                    // Translate to signed bit-vectors when extended even though
+                    // originally unsigned
+                    m_is_signed = true;
+                    break;
+                }
+                oa.reset();
+            }
+        }
+
+        assert(extended_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
+        m_extended_bv_size = extended_size;
+    }
+
     z3::expr Int2BvTranslator::translate(const z3::expr& e, bool handle_overflow) {
         if (!handle_overflow)
             return translate_aux(e);
@@ -222,25 +257,14 @@ namespace multi_theory_horn {
         z3::expr expr_to_translate = e;
         if (m_force_preprocess) {
             expr_to_translate = preprocessor.preprocess(e);
-            DEBUG_MSG(OUT() << "Preprocessed expr: " << expr_to_translate << "\n");
+            LDBG("Preprocessed expr: " << expr_to_translate << "\n");
         }
         else {
             // We try to avoid preprocessing here by translating to larger
             // bit-vectors only if necessary.
             // Set the extended bv size based on the signedness.
-            m_extended_bv_size = m_is_signed ? m_bv_size - 1 : m_bv_size;
-            bool requires_extension = false;
-            do {
-                m_extended_bv_size += 1;
-                DEBUG_MSG(OUT() << "Checking if phi requires extension for bv size "
-                                << m_extended_bv_size << std::endl);
-                requires_extension = preprocessor.overflows(e, m_extended_bv_size);
-            } while (requires_extension);
-
-            // In this case, always translate as though we translating
-            // signed expressions.
-            m_is_signed = true;
-            assert(m_extended_bv_size <= MAX_MTH_BV_SIZE && "Exceeded maximum bit-vector size extension");
+            determine_extension_config(e);
+            LDBG("Determined extended BV size: " << m_extended_bv_size << "\n");
         }
 
         return translate_aux(expr_to_translate);
