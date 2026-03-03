@@ -17,10 +17,6 @@ namespace multi_theory_horn {
         unsigned m_bv_size;
         bool m_is_signed;
 
-        // The bit-vector size used to check if the expression
-        // overflows. The extended size is by default equal to m_bv_size.
-        unsigned m_bv_size_extended;
-
         using ExprVectorMatrix = std::vector<std::vector<z3::expr_vector>>;
         using LiteralMatrix = std::vector<std::vector<z3::expr>>;
         using boolMatrix = std::vector<std::vector<bool>>;
@@ -36,17 +32,12 @@ namespace multi_theory_horn {
         ExprVectorMatrix m_func_app_out_of_bounds;
         LiteralMatrix m_literals;
 
-
-        // Returns the number of conjuncts in an expression
-        int calc_num_of_conjuncts(const z3::expr& e) const;
-        int calc_num_of_disjuncts(const z3::expr& e) const;
         int get_num_of_conjuncts() const;
         int get_num_of_disjuncts(int conjunct) const;
 
         bool is_const_variable(const z3::expr& e) const;
 
-        z3::expr create_arith_bounds_expr(const z3::expr& term) const;
-        z3::expr create_var_bounds_expr(const z3::expr& var) const;
+        z3::expr create_bounds_expr(const z3::expr& term) const;
         bool is_const_in_bounds(const z3::expr& const_e) const;
         z3::expr create_term_out_of_bounds_expr(const z3::expr& e) const;
 
@@ -81,11 +72,6 @@ namespace multi_theory_horn {
         z3::expr create_SAT_out_of_bounds(const z3::expr& e);
         z3::expr create_UNSAT_out_of_bounds(const z3::expr& e);
 
-        // A function that checks whether the given expression requires preprocessing
-        // for overflow/underflow when using the given extended bit-vector size.
-        // We might have a case that doesn't require preprocessing for bv_size
-        // larger than the base size.
-        bool overflows(const z3::expr& e, unsigned extended_size);
         z3::expr preprocess(const z3::expr& e);
     };
 } // namespace multi_theory_horn
