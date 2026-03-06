@@ -601,7 +601,7 @@ namespace multi_theory_horn {
                     else {
                         unsigned bv_size = current_solver->get_bv_size();
                         Int2BvTranslator int2bv_t(m_ctx, is_signed /*is_signed*/, bv_size, /*force_preprocess*/ m_int2bv_preprocess, m_simplify, var_map);
-                        p_interp_trans = int2bv_t.translate(p_interp, /*handle_overflow*/ true);
+                        p_interp_trans = int2bv_t.translate(p_interp);
                     }
                     DEBUG_MSG(OUT() << "Translated interpretation of " << p_decl.name() << ":\n" << p_interp_trans << std::endl);
 
@@ -674,8 +674,8 @@ namespace multi_theory_horn {
                         translated_vars = bv2int_t.vars();
                     } else {
                         unsigned bv_size = current_solver->get_bv_size();
-                        Int2BvTranslator int2bv_t(m_ctx, true /*is_signed*/, bv_size, /*force_preprocess*/ m_int2bv_preprocess, m_simplify);
-                        phi_trans = int2bv_t.translate(phi, /*handle_overflow*/ true);
+                        Int2BvTranslator int2bv_t(m_ctx, is_signed /*is_signed*/, bv_size, /*force_preprocess*/ m_int2bv_preprocess, m_simplify);
+                        phi_trans = int2bv_t.translate(phi);
                         translated_vars = int2bv_t.vars();
                     }
 
