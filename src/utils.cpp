@@ -25,12 +25,13 @@ namespace utils {
     }
 
     int64_t sign_extend(uint64_t raw, unsigned width) {
+        assert(width > 0 && width <= 63);
         // keep only the low 'width' bits
-        int64_t mask = (1 << width) - 1;
+        uint64_t mask = (1ULL << width) - 1;
         int64_t u    = raw & mask;
         // if top bit set, subtract 2^width
-        if (u & (1 << (width-1)))
-            u -= (1 << width);
+        if (u & (1ULL << (width - 1)))
+            u -= (1ULL << width);
         return u;
     }
 
