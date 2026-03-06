@@ -2,6 +2,7 @@
 
 #include "Bv2IntTranslator.h"
 
+#define LDBG(x) DEBUG_MSG(OUT() << "[Bv2IntTranslator] " << x)
 namespace multi_theory_horn {
 
     Bv2IntTranslator::Bv2IntTranslator(z3::context& c, bool is_signed, 
